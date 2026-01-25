@@ -22,7 +22,9 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
   const [loadingMessage, setLoadingMessage] = useState('서비스 준비 중...');
   const [progress, setProgress] = useState(0);
   const [isCached, setIsCached] = useState(false);
+  const [isOrientationReady, setIsOrientationReady] = useState(false);
   const orientation = useLayoutStore((state) => state.orientation);
+  const initOrientation = useLayoutStore((state) => state.initOrientation);
   const [scale, setScale] = useState(1);
 
   const calculateScale = useCallback(() => {
@@ -37,11 +39,18 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
     setScale(newScale);
   }, [orientation]);
 
+  // 먼저 orientation 초기화 (TTS 로딩 전에 완료)
   useEffect(() => {
+    initOrientation();
+    setIsOrientationReady(true);
+  }, [initOrientation]);
+
+  useEffect(() => {
+    if (!isOrientationReady) return;
     calculateScale();
     window.addEventListener('resize', calculateScale);
     return () => window.removeEventListener('resize', calculateScale);
-  }, [calculateScale]);
+  }, [calculateScale, isOrientationReady]);
 
   const handleLoadProgress = useCallback((prog: number, message: string) => {
     setProgress(prog);
@@ -58,9 +67,9 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
     preferSupertonic: true,
   });
 
-  // Start loading
+  // Start loading (orientation 초기화 후)
   useEffect(() => {
-    if (skipLoading) return;
+    if (skipLoading || !isOrientationReady) return;
 
     let mounted = true;
 
@@ -118,7 +127,7 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
     return () => {
       mounted = false;
     };
-  }, [loadSupertonic, skipLoading]);
+  }, [loadSupertonic, skipLoading, isOrientationReady]);
 
   const isLoading = phase === 'loading';
   const isReady = phase === 'ready';
