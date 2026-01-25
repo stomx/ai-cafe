@@ -158,7 +158,7 @@ export function ServiceLoader({ onReady }: ServiceLoaderProps) {
                   />
                 </svg>
               </div>
-              <h1 className={styles.title}>AI Cafe</h1>
+              <h2 className={styles.title}>AI Cafe</h2>
               <p className={styles.subtitle}>Midnight Roast</p>
             </div>
 

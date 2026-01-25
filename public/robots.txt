@@ -1,0 +1,8 @@
+# AI Cafe - robots.txt
+# https://ai-cafe.stomx.net
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://ai-cafe.stomx.net/sitemap.xml
