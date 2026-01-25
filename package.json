@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/download-models.mjs && next build",
-    "build:local": "next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },

@@ -24,6 +24,10 @@ const ORT_CDN_URL = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/or
 // Cache name for TTS models
 const TTS_CACHE_NAME = 'supertonic-tts-v1';
 
+// TTS ONNX 모델 CDN URL (환경변수로 설정)
+// 로컬: /tts/onnx, 운영: https://assets.stomx.net/tts/onnx
+const TTS_CDN_URL = process.env.NEXT_PUBLIC_TTS_CDN_URL || '/tts/onnx';
+
 // ============================================================================
 // Cache Utilities
 // ============================================================================
@@ -549,6 +553,7 @@ export class SupertonicTTS implements TTSEngine {
       };
 
       // 3. Load ONNX models (10-90%) - with cache
+      // ONNX files are loaded from GitHub Releases (Cloudflare Pages 25MB limit)
       const models = [
         { name: 'duration_predictor', label: 'Duration Predictor' },
         { name: 'text_encoder', label: 'Text Encoder' },
@@ -563,8 +568,8 @@ export class SupertonicTTS implements TTSEngine {
         onProgress?.(progress, `${model.label} 로딩...${isCached}`);
         this._loadProgress = progress;
 
-        // Fetch model ArrayBuffer with cache, then create session from buffer
-        const modelUrl = `${this.basePath}/${model.name}.onnx`;
+        // Load ONNX from CDN (R2) or local path
+        const modelUrl = `${TTS_CDN_URL}/${model.name}.onnx`;
         const modelBuffer = await fetchArrayBufferWithCache(modelUrl);
 
         const session = await this.ort.InferenceSession.create(

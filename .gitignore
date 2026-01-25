@@ -40,3 +40,4 @@ next-env.d.ts
 
 # TTS ONNX models (download separately)
 public/tts/onnx/*.onnx
+.env.local
