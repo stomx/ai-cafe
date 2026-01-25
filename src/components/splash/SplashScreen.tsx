@@ -72,11 +72,18 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
     setLoadingMessage('기본 음성 엔진으로 전환...');
   }, []);
 
-  const { loadSupertonic } = useTextToSpeech({
+  const { loadSupertonic, activateWebSpeech } = useTextToSpeech({
     onLoadProgress: handleLoadProgress,
     onError: handleLoadError,
     preferSupertonic: true,
   });
+
+  // 시작 버튼 클릭 핸들러 (iOS Web Speech API 활성화 포함)
+  const handleStart = useCallback(() => {
+    // iOS에서 Web Speech API 활성화 (사용자 인터랙션 컨텍스트 내에서 호출 필요)
+    activateWebSpeech();
+    onStart();
+  }, [activateWebSpeech, onStart]);
 
   // Start loading (orientation 초기화 후)
   useEffect(() => {
@@ -294,7 +301,7 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
                 </span>
               </div>
 
-              <button className={styles.startButton} onClick={onStart}>
+              <button className={styles.startButton} onClick={handleStart}>
                 <span className={styles.startIcon}>☕</span>
                 <span>시작하기</span>
               </button>

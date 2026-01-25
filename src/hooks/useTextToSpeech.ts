@@ -28,6 +28,7 @@ interface UseTextToSpeechReturn {
   pause: () => void;
   resume: () => void;
   loadSupertonic: () => Promise<boolean>;
+  activateWebSpeech: () => void;
   error: string | null;
 }
 
@@ -73,6 +74,22 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}): UseTextTo
   // Store callbacks in refs
   const callbacksRef = useRef({ onStart, onEnd, onError, onLoadProgress });
   callbacksRef.current = { onStart, onEnd, onError, onLoadProgress };
+
+  // iOS 사용자 인터랙션 활성화 플래그
+  const isActivatedRef = useRef(false);
+
+  // Web Speech API 활성화 (iOS에서 사용자 인터랙션 필요)
+  const activateWebSpeech = useCallback(() => {
+    if (isActivatedRef.current) return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    // iOS Safari에서 오디오 컨텍스트 활성화를 위한 빈 음성 재생
+    const utterance = new SpeechSynthesisUtterance('');
+    utterance.volume = 0;
+    window.speechSynthesis.speak(utterance);
+    isActivatedRef.current = true;
+    console.log('[TTS] Web Speech API activated for iOS');
+  }, []);
 
   // Find Korean voice for Web Speech API
   const findKoreanVoice = useCallback(() => {
@@ -362,6 +379,7 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}): UseTextTo
     pause,
     resume,
     loadSupertonic,
+    activateWebSpeech,
     error,
   };
 }
