@@ -1,0 +1,59 @@
+# Semantic Registry - Class names for components
+version: 1.0.0
+
+components:
+  button:
+    base: btn
+    variants:
+      primary: btn-primary
+      secondary: btn-secondary
+      ghost: btn-ghost
+      icon: btn-icon
+    sizes:
+      sm: btn-sm
+      md: btn-md
+      lg: btn-lg
+
+  card:
+    base: card
+    variants:
+      default: card-default
+      elevated: card-elevated
+      outlined: card-outlined
+    parts:
+      header: card-header
+      body: card-body
+      footer: card-footer
+
+  badge:
+    base: badge
+    variants:
+      default: badge-default
+      success: badge-success
+      warning: badge-warning
+      error: badge-error
+      info: badge-info
+
+  input:
+    base: input
+    variants:
+      default: input-default
+      search: input-search
+    states:
+      focused: input-focused
+      error: input-error
+
+  status:
+    base: status-dot
+    variants:
+      ready: status-ready
+      loading: status-loading
+      error: status-error
+      idle: status-idle
+
+layout:
+  header: kiosk-header
+  main: kiosk-main
+  menu_section: menu-section
+  order_section: order-section
+  queue_section: queue-section
