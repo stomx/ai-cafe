@@ -1,26 +1,33 @@
 /** @type {import('next').NextConfig} */
+
+const isProduction = process.env.NODE_ENV === 'production';
+
 const nextConfig = {
-  output: 'export',
+  // Static Export는 프로덕션 빌드에서만 적용
+  ...(isProduction && { output: 'export' }),
   images: {
     unoptimized: true,
   },
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
-          },
-          {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'require-corp',
-          },
-        ],
-      },
-    ];
-  },
+  // 로컬 개발에서만 headers 적용 (Static Export에서는 public/_headers 사용)
+  ...(!isProduction && {
+    async headers() {
+      return [
+        {
+          source: '/:path*',
+          headers: [
+            {
+              key: 'Cross-Origin-Opener-Policy',
+              value: 'same-origin',
+            },
+            {
+              key: 'Cross-Origin-Embedder-Policy',
+              value: 'require-corp',
+            },
+          ],
+        },
+      ];
+    },
+  }),
   webpack: (config, { isServer }) => {
     config.experiments = {
       ...config.experiments,
