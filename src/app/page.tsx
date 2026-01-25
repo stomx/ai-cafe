@@ -11,14 +11,12 @@ import { SplashScreen } from '@/components/splash';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
 import { useTextToSpeech } from '@/hooks/useTextToSpeech';
 import { useSessionTimer } from '@/hooks/useSessionTimer';
+import { useVoiceOrderProcessor } from '@/hooks/useVoiceOrderProcessor';
 import { useOrderStore } from '@/store/orderStore';
 import { useQueueStore } from '@/store/queueStore';
 import { useChatStore } from '@/store/chatStore';
-import { matchVoiceToMenu, formatOrderConfirmation, type MatchedOrder } from '@/utils/menuMatcher';
-import { isEcho, onTTSStart, onTTSEnd, resetEchoFilter } from '@/utils/echoFilter';
+import { onTTSStart, onTTSEnd, resetEchoFilter } from '@/utils/echoFilter';
 import type { MenuItem } from '@/types/menu';
-
-type VoiceState = 'idle' | 'listening' | 'timeout' | 'success';
 
 const VOICE_TIMEOUT = 30; // 음성 입력 종료 시점 (세션 잔여 시간 기준, 초)
 const SESSION_WARNING = 10; // 세션 종료 임박 경고 (초)
@@ -27,15 +25,12 @@ export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
   const [showTemperatureModal, setShowTemperatureModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
-  const [pendingOrders, setPendingOrders] = useState<MatchedOrder[]>([]);
-  const [temperatureConflicts, setTemperatureConflicts] = useState<MatchedOrder[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<{ menuItem: MenuItem; quantity: number }[]>([]);
 
   // 얼굴 인식 On/Off
   const [faceDetectionEnabled, setFaceDetectionEnabled] = useState(true);
 
   const hasAutoStartedRef = useRef(false);
-  const interimMessageIdRef = useRef<string | null>(null);
   const speakRef = useRef<(text: string) => void>(() => {});
   const hasShownMicTimeoutRef = useRef(false);
   const hasShownSessionWarningRef = useRef(false);
@@ -48,26 +43,23 @@ export default function Home() {
 
   // Chat store
   const addGreeting = useChatStore((state) => state.addGreeting);
-  const addUserVoice = useChatStore((state) => state.addUserVoice);
-  const updateMessage = useChatStore((state) => state.updateMessage);
-  const removeMessage = useChatStore((state) => state.removeMessage);
   const addAssistantResponse = useChatStore((state) => state.addAssistantResponse);
-  const setTyping = useChatStore((state) => state.setTyping);
   const clearMessages = useChatStore((state) => state.clearMessages);
 
   // Session timeout handler - 세션 타임아웃 시 호출, 스플래시 화면으로 복귀
+  // resetVoiceProcessorRef를 사용하여 stale closure 방지
+  const resetVoiceProcessorRef = useRef<() => void>(() => {});
+
   const handleSessionTimeout = useCallback(() => {
     console.log('[Page] Session timeout - returning to splash');
-    setVoiceState('idle');
     setShowTemperatureModal(false);
     setSelectedItem(null);
     setPendingOrders([]);
-    setTemperatureConflicts([]);
     clearOrder();
     clearMessages();
     resetEchoFilter();
+    resetVoiceProcessorRef.current(); // 음성 처리 상태 초기화
     hasAutoStartedRef.current = false;
-    interimMessageIdRef.current = null;
     hasShownMicTimeoutRef.current = false;
     hasShownSessionWarningRef.current = false;
     // 스플래시 화면으로 복귀
@@ -84,330 +76,22 @@ export default function Home() {
     SESSION_TIMEOUT,
   } = useSessionTimer(handleSessionTimeout);
 
-  // Process matched orders - add to order or return items needing temperature selection
-  const processMatchedOrders = useCallback((orders: MatchedOrder[]): MatchedOrder[] => {
-    const needsTemperature: MatchedOrder[] = [];
+  // Voice order processor hook
+  const {
+    voiceState,
+    setVoiceState,
+    temperatureConflicts,
+    handleSpeechResult,
+    handleVoiceTemperatureSelect,
+    interimMessageIdRef,
+    resetState: resetVoiceProcessor,
+  } = useVoiceOrderProcessor({
+    speakRef,
+    resetActivity,
+  });
 
-    for (const order of orders) {
-      if (order.temperature === null && order.menuItem.temperatures.length > 1) {
-        // Need to select temperature - don't add yet, return for question
-        needsTemperature.push({
-          ...order,
-          needsTemperatureConfirm: false, // 단순 온도 선택 (충돌 아님)
-        });
-      } else {
-        // Can add directly
-        const temp = order.temperature ?? order.menuItem.temperatures[0] ?? null;
-        for (let i = 0; i < order.quantity; i++) {
-          addItem(order.menuItem, temp);
-        }
-      }
-    }
-
-    return needsTemperature;
-  }, [addItem]);
-
-  // 주문 무관 안내 메시지
-  const ORDER_ONLY_MESSAGE = '저는 주문과 관련된 대화만 가능합니다. 주문과 관련된 말씀 부탁드립니다.';
-
-  // 키워드 기반 의도 분류 함수들
-  const isConfirmation = useCallback((text: string): boolean => {
-    const confirmKeywords = ['네', '응', '예', '좋아', '좋아요', '그래', '그래요', '핫으로', '핫으로 해', '핫으로 해주세요', '그걸로', '그걸로 해', '괜찮아', '괜찮아요'];
-    const lowerText = text.toLowerCase().trim();
-    return confirmKeywords.some(keyword => lowerText.includes(keyword));
-  }, []);
-
-  const isRejection = useCallback((text: string): boolean => {
-    const rejectKeywords = ['아니', '아니요', '아뇨', '싫어', '싫어요', '다른', '다른거', '다른 거', '취소', '안 할래', '안할래', '됐어', '됐어요'];
-    const lowerText = text.toLowerCase().trim();
-    return rejectKeywords.some(keyword => lowerText.includes(keyword));
-  }, []);
-
-  const isTemperatureResponse = useCallback((text: string): 'HOT' | 'ICE' | null => {
-    const lowerText = text.toLowerCase().trim();
-    const hotKeywords = ['핫', '따뜻한', '따듯한', '뜨거운', '따뜻하게', '따듯하게', '뜨겁게', 'hot'];
-    const iceKeywords = ['아이스', '차가운', '시원한', '차갑게', '시원하게', 'ice', 'iced'];
-
-    if (iceKeywords.some(k => lowerText.includes(k))) return 'ICE';
-    if (hotKeywords.some(k => lowerText.includes(k))) return 'HOT';
-    return null;
-  }, []);
-
-  const isOrderConfirmIntent = useCallback((text: string): boolean => {
-    const confirmIntentKeywords = [
-      '이대로 주문', '이대로 해', '이걸로 해', '이걸로 주문',
-      '주문할게', '주문 할게', '주문해줘', '주문 해줘',
-      '결제할게', '결제 할게', '결제해줘', '결제 해줘',
-      '계산할게', '계산 할게', '계산해줘', '계산 해줘',
-      '끝이야', '끝 이야', '다 됐어', '다됐어', '다 했어',
-      '그게 다야', '그게 전부야', '더 없어', '더없어',
-      '주문 완료', '주문완료', '확정', '완료',
-    ];
-    const lowerText = text.toLowerCase().trim();
-    return confirmIntentKeywords.some(keyword => lowerText.includes(keyword));
-  }, []);
-
-  const isOrderRelated = useCallback((text: string, matchResult: ReturnType<typeof matchVoiceToMenu>): boolean => {
-    if (matchResult.orders.length > 0) return true;
-    if (matchResult.temperatureConflicts.length > 0) return true;
-    if (matchResult.unmatched.length > 0) return true;
-    if (isConfirmation(text) || isRejection(text)) return true;
-    return false;
-  }, [isConfirmation, isRejection]);
-
-  // Speech-to-text handlers
-  const handleSpeechResult = useCallback((text: string, isFinal: boolean) => {
-    console.log('[Page] handleSpeechResult called:', { text, isFinal });
-
-    // 에코 필터링 - TTS 음성이 마이크로 들어온 경우 무시
-    const echoCheck = isEcho(text);
-    if (echoCheck.isEcho) {
-      console.log('[Page] Echo detected, ignoring:', text, echoCheck.reason);
-      // 임시 메시지도 삭제
-      if (interimMessageIdRef.current) {
-        removeMessage(interimMessageIdRef.current);
-        interimMessageIdRef.current = null;
-      }
-      return;
-    }
-
-    // 음성 입력 시 활동 타이머 리셋
-    resetActivity();
-
-    if (isFinal && text.trim()) {
-      console.log('[Page] Processing final result (passed echo filter)');
-
-      // 임시 메시지가 있으면 삭제
-      if (interimMessageIdRef.current) {
-        removeMessage(interimMessageIdRef.current);
-        interimMessageIdRef.current = null;
-      }
-
-      setVoiceState('success');
-      setTyping(true);
-
-      // 1. 주문 확정 의도 체크
-      if (isOrderConfirmIntent(text)) {
-        console.log('[Page] Order confirm intent detected:', text);
-        addUserVoice(text, false);
-
-        if (temperatureConflicts.length > 0) {
-          // 온도 선택 대기 중이면 먼저 처리해야 함
-          const conflict = temperatureConflicts[0];
-          const msg = `먼저 ${conflict.menuItem.name}의 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
-          setTimeout(() => {
-            addAssistantResponse(msg);
-            speakRef.current(msg);
-          }, 300);
-        } else if (items.length > 0) {
-          // 주문 내역이 있으면 확정 (quantity 고려)
-          const itemNames = items.flatMap((item) => {
-            const name = item.temperature ? `${item.name}(${item.temperature})` : item.name;
-            return Array(item.quantity).fill(name);
-          });
-          addToQueue(itemNames);
-          clearOrder();
-          clearMessages();
-          setVoiceState('idle');
-
-          setTimeout(() => {
-            const msg = '주문이 완료되었습니다! 잠시만 기다려주세요.';
-            addAssistantResponse(msg);
-            speakRef.current(msg);
-          }, 300);
-        } else {
-          // 주문 내역이 없으면 안내
-          setTimeout(() => {
-            const msg = '아직 주문 내역이 없어요. 먼저 메뉴를 선택해주세요.';
-            addAssistantResponse(msg);
-            speakRef.current(msg);
-          }, 300);
-        }
-        setTyping(false);
-        return;
-      }
-
-      // 2. 온도 충돌 처리 중인 경우
-      if (temperatureConflicts.length > 0) {
-        const currentConflict = temperatureConflicts[0];
-        console.log('[Page] Processing temperature conflict response:', text);
-
-        // 먼저 온도 응답인지 확인
-        const tempResponse = isTemperatureResponse(text);
-
-        if (tempResponse !== null) {
-          addUserVoice(text, false);
-
-          if (currentConflict.menuItem.temperatures.includes(tempResponse)) {
-            // 가능한 온도 - 주문에 추가
-            for (let i = 0; i < currentConflict.quantity; i++) {
-              addItem(currentConflict.menuItem, tempResponse);
-            }
-
-            const remainingConflicts = temperatureConflicts.slice(1);
-            setTemperatureConflicts(remainingConflicts);
-
-            const tempKo = tempResponse === 'HOT' ? '핫' : '아이스';
-            let response = `${currentConflict.menuItem.name} ${tempKo}으로 추가했어요.`;
-
-            if (remainingConflicts.length > 0) {
-              const next = remainingConflicts[0];
-              if (next.needsTemperatureConfirm && next.requestedTemperature) {
-                const nextReqTempKo = next.requestedTemperature === 'ICE' ? '아이스' : '핫';
-                const nextAvailTempKo = next.availableTemperature === 'ICE' ? '아이스' : '핫';
-                response += ` ${next.menuItem.name}은 ${nextReqTempKo}가 없어요. ${nextAvailTempKo}으로 드릴까요?`;
-              } else {
-                response += ` ${next.menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
-              }
-            } else {
-              response += ' 더 필요하신 게 있으신가요?';
-            }
-
-            setTimeout(() => {
-              addAssistantResponse(response);
-              speakRef.current(response);
-            }, 300);
-          } else {
-            // 불가능한 온도 - 안내
-            const tempKo = tempResponse === 'HOT' ? '핫' : '아이스';
-            const availTempKo = currentConflict.menuItem.temperatures[0] === 'HOT' ? '핫' : '아이스';
-            const response = `${currentConflict.menuItem.name}은 ${tempKo}가 없어요. ${availTempKo}만 가능해요. ${availTempKo}으로 드릴까요?`;
-
-            setTimeout(() => {
-              addAssistantResponse(response);
-              speakRef.current(response);
-            }, 300);
-          }
-        } else if (isConfirmation(text)) {
-          addUserVoice(text, false);
-
-          const temp = currentConflict.availableTemperature ?? currentConflict.menuItem.temperatures[0]!;
-          for (let i = 0; i < currentConflict.quantity; i++) {
-            addItem(currentConflict.menuItem, temp);
-          }
-
-          const remainingConflicts = temperatureConflicts.slice(1);
-          setTemperatureConflicts(remainingConflicts);
-
-          const tempKo = temp === 'HOT' ? '핫' : '아이스';
-          let response = `${currentConflict.menuItem.name} ${tempKo}으로 추가했어요.`;
-
-          if (remainingConflicts.length > 0) {
-            const next = remainingConflicts[0];
-            if (next.needsTemperatureConfirm && next.requestedTemperature) {
-              const nextReqTempKo = next.requestedTemperature === 'ICE' ? '아이스' : '핫';
-              const nextAvailTempKo = next.availableTemperature === 'ICE' ? '아이스' : '핫';
-              response += ` ${next.menuItem.name}은 ${nextReqTempKo}가 없어요. ${nextAvailTempKo}으로 드릴까요?`;
-            } else {
-              response += ` ${next.menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
-            }
-          } else {
-            response += ' 더 필요하신 게 있으신가요?';
-          }
-
-          setTimeout(() => {
-            addAssistantResponse(response);
-            speakRef.current(response);
-          }, 300);
-        } else if (isRejection(text)) {
-          addUserVoice(text, false);
-
-          const remainingConflicts = temperatureConflicts.slice(1);
-          setTemperatureConflicts(remainingConflicts);
-
-          let response = `${currentConflict.menuItem.name}은 주문에서 뺐어요.`;
-
-          if (remainingConflicts.length > 0) {
-            const next = remainingConflicts[0];
-            if (next.needsTemperatureConfirm && next.requestedTemperature) {
-              const nextReqTempKo = next.requestedTemperature === 'ICE' ? '아이스' : '핫';
-              const nextAvailTempKo = next.availableTemperature === 'ICE' ? '아이스' : '핫';
-              response += ` ${next.menuItem.name}은 ${nextReqTempKo}가 없어요. ${nextAvailTempKo}으로 드릴까요?`;
-            } else {
-              response += ` ${next.menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
-            }
-          } else {
-            response += ' 다른 메뉴를 주문하시겠어요?';
-          }
-
-          setTimeout(() => {
-            addAssistantResponse(response);
-            speakRef.current(response);
-          }, 300);
-        } else {
-          // 새로운 주문 시도
-          const matchResult = matchVoiceToMenu(text);
-          console.log('[Page] Menu match result (with pending conflicts):', matchResult);
-
-          if (matchResult.orders.length > 0 || matchResult.temperatureConflicts.length > 0) {
-            addUserVoice(text, false);
-
-            const needsTemp = processMatchedOrders(matchResult.orders);
-            setTemperatureConflicts(prev => [...prev, ...matchResult.temperatureConflicts, ...needsTemp]);
-
-            const response = formatOrderConfirmation(matchResult);
-            setTimeout(() => {
-              addAssistantResponse(response);
-              speakRef.current(response);
-            }, 300);
-          } else {
-            console.log('[Page] Non-order message during conflict, showing guide');
-            setTimeout(() => {
-              addAssistantResponse(ORDER_ONLY_MESSAGE);
-              speakRef.current(ORDER_ONLY_MESSAGE);
-            }, 300);
-          }
-        }
-        setTyping(false);
-        return;
-      }
-
-      // 3. 일반 주문 처리
-      const matchResult = matchVoiceToMenu(text);
-      console.log('[Page] Menu match result:', matchResult);
-
-      if (isOrderRelated(text, matchResult)) {
-        addUserVoice(text, false);
-
-        if (matchResult.orders.length > 0 || matchResult.temperatureConflicts.length > 0) {
-          const needsTemp = processMatchedOrders(matchResult.orders);
-          setTemperatureConflicts([...matchResult.temperatureConflicts, ...needsTemp]);
-
-          const response = formatOrderConfirmation(matchResult);
-          setTimeout(() => {
-            addAssistantResponse(response);
-            speakRef.current(response);
-          }, 300);
-        } else if (matchResult.unmatched.length > 0) {
-          const response = formatOrderConfirmation(matchResult);
-          setTimeout(() => {
-            addAssistantResponse(response);
-            speakRef.current(response);
-          }, 300);
-        }
-      } else {
-        console.log('[Page] Non-order message, showing guide');
-        setTimeout(() => {
-          addAssistantResponse(ORDER_ONLY_MESSAGE);
-          speakRef.current(ORDER_ONLY_MESSAGE);
-        }, 300);
-      }
-
-      setTyping(false);
-    } else if (!isFinal && text.trim()) {
-      // Interim result
-      if (interimMessageIdRef.current) {
-        updateMessage(interimMessageIdRef.current, text, true);
-      } else {
-        interimMessageIdRef.current = addUserVoice(text, true);
-      }
-    }
-  }, [
-    addUserVoice, updateMessage, removeMessage, addAssistantResponse, setTyping,
-    processMatchedOrders, temperatureConflicts, isConfirmation, isRejection,
-    isTemperatureResponse, isOrderConfirmIntent, isOrderRelated, addItem,
-    items, addToQueue, clearOrder, clearMessages, resetActivity
-  ]);
+  // Keep resetVoiceProcessorRef updated for use in handleSessionTimeout
+  resetVoiceProcessorRef.current = resetVoiceProcessor;
 
   // 얼굴 인식 토글
   const toggleFaceDetection = useCallback(() => {
@@ -416,6 +100,7 @@ export default function Home() {
 
   const handleSilenceTimeout = useCallback(() => {
     if (interimMessageIdRef.current) {
+      const removeMessage = useChatStore.getState().removeMessage;
       removeMessage(interimMessageIdRef.current);
       interimMessageIdRef.current = null;
     }
@@ -425,7 +110,7 @@ export default function Home() {
     addAssistantResponse(msg);
     speakRef.current(msg);
     // 음성 타임아웃 시에도 활동으로 간주하지 않음 - 세션 타이머는 계속 진행
-  }, [addAssistantResponse, removeMessage]);
+  }, [addAssistantResponse, setVoiceState, interimMessageIdRef]);
 
   const handleSpeechStart = useCallback(() => {
     // voiceState는 sttState에서 동기화되므로 여기서 설정 불필요
@@ -462,7 +147,7 @@ export default function Home() {
       // STT가 종료됨 - voiceState도 idle로 (timeout/success는 이미 콜백에서 설정됨)
       setVoiceState(prev => prev === 'listening' ? 'idle' : prev);
     }
-  }, [sttState]);
+  }, [sttState, setVoiceState]);
 
   // Text-to-Speech with echo filter callbacks
   const { speak } = useTextToSpeech({
@@ -581,37 +266,6 @@ export default function Home() {
     }
   }, [selectedItem, addItem, pendingOrders, resetActivity, isListening, stopListening]);
 
-  // 음성 주문 시 터치로 온도 선택
-  const handleVoiceTemperatureSelect = useCallback((temp: 'HOT' | 'ICE') => {
-    resetActivity(); // 활동 타이머 리셋
-
-    if (temperatureConflicts.length === 0) return;
-
-    const currentConflict = temperatureConflicts[0];
-
-    if (currentConflict.menuItem.temperatures.includes(temp)) {
-      for (let i = 0; i < currentConflict.quantity; i++) {
-        addItem(currentConflict.menuItem, temp);
-      }
-
-      const remainingConflicts = temperatureConflicts.slice(1);
-      setTemperatureConflicts(remainingConflicts);
-
-      const tempKo = temp === 'HOT' ? '핫' : '아이스';
-      let response = `${currentConflict.menuItem.name} ${tempKo}으로 추가했어요.`;
-
-      if (remainingConflicts.length > 0) {
-        const next = remainingConflicts[0];
-        response += ` ${next.menuItem.name} 온도를 선택해주세요.`;
-      } else {
-        response += ' 더 필요하신 게 있으신가요?';
-      }
-
-      addAssistantResponse(response);
-      speakRef.current(response);
-    }
-  }, [temperatureConflicts, addItem, addAssistantResponse, resetActivity]);
-
   const handleConfirmOrder = useCallback(() => {
     if (items.length === 0) return;
 
@@ -633,7 +287,7 @@ export default function Home() {
       addAssistantResponse(msg);
       speakRef.current(msg);
     }, 500);
-  }, [items, addToQueue, clearOrder, clearMessages, addAssistantResponse, stopSession]);
+  }, [items, addToQueue, clearOrder, clearMessages, addAssistantResponse, stopSession, setVoiceState]);
 
   const handleFaceDetected = useCallback(() => {
     // 아직 자동 시작하지 않은 경우에만
@@ -667,16 +321,17 @@ export default function Home() {
     // 순서 중요: startListening 전에 resetActivity를 호출해야 15초 이하 체크에서 안전
     resetActivity();
     startListening();
-  }, [startListening, resetActivity]);
+  }, [startListening, resetActivity, interimMessageIdRef]);
 
   const handleStopListening = useCallback(() => {
     console.log('[Page] handleStopListening called');
     if (interimMessageIdRef.current) {
+      const removeMessage = useChatStore.getState().removeMessage;
       removeMessage(interimMessageIdRef.current);
       interimMessageIdRef.current = null;
     }
     stopListening();
-  }, [stopListening, removeMessage]);
+  }, [stopListening, interimMessageIdRef]);
 
   // Show splash screen (includes loading)
   if (showSplash) {

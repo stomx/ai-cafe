@@ -293,7 +293,7 @@ function extractTemperature(text: string): 'HOT' | 'ICE' | null {
 /**
  * Extract quantity from text
  */
-function extractQuantity(text: string): number {
+export function extractQuantity(text: string): number {
   // Normalize whitespace and remove common filler words
   const normalizedText = text.replace(/\s+/g, ' ').trim();
   // Also check without any spaces for STT variations

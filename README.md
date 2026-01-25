@@ -26,9 +26,9 @@ npm run dev
 | 기능 | 설명 | 기술 |
 |------|------|------|
 | Face Detection | 얼굴 인식 시 자동 인사 | MediaPipe + TensorFlow.js |
-| STT | 음성으로 주문 접수 | Whisper (Transformers.js) |
+| STT | 음성으로 주문 접수 | Web Speech API |
 | TTS | 음성으로 안내 | Supertonic (ONNX) |
-| LLM | 자연어 주문 처리 | WebLLM (Qwen) |
+| NLU | 자연어 주문 처리 | 규칙 기반 (Rule-based) |
 
 ## 시나리오
 
@@ -46,8 +46,7 @@ npm run dev
 | 요구사항 | 최소 | 권장 |
 |----------|------|------|
 | 브라우저 | Chrome/Edge 113+ | 최신 버전 |
-| GPU | WebGPU 지원 | 4GB+ VRAM |
-| RAM | 8GB | 16GB |
+| RAM | 4GB | 8GB |
 | Node.js | 18+ | 20+ |
 
 ## 기술 스택
@@ -62,9 +61,9 @@ npm run dev
 | Feature | Library | Size |
 |---------|---------|------|
 | Face Detection | MediaPipe + TensorFlow.js | ~3MB |
-| STT | Whisper via Transformers.js | ~250MB |
+| STT | Web Speech API | - (브라우저 내장) |
 | TTS | Supertonic (ONNX) | ~70MB |
-| LLM | WebLLM + Qwen2.5-1.5B | ~1GB |
+| NLU | 규칙 기반 (Rule-based) | - (코드 내장) |
 
 > 자세한 기술 결정 내용은 [TECH-STACK.md](./docs/TECH-STACK.md) 참조
 
@@ -73,8 +72,8 @@ npm run dev
 ### Prerequisites
 - Node.js 18+ (권장: 20+)
 - npm 또는 yarn
-- Chrome/Edge (WebGPU 지원 브라우저)
-- 8GB+ RAM (권장: 16GB)
+- Chrome/Edge (Web Speech API 지원 브라우저)
+- 4GB+ RAM (권장: 8GB)
 
 ### 설치 및 실행
 
@@ -108,10 +107,11 @@ ai-cafe/
 │   │   ├── order/        # 주문 섹션
 │   │   └── queue/        # 대기열 섹션
 │   ├── hooks/            # Custom hooks
-│   │   ├── useSTT.ts     # 음성 인식
-│   │   ├── useTTS.ts     # 음성 합성
-│   │   ├── useLLM.ts     # LLM 처리
-│   │   └── useFaceDetection.ts
+│   │   ├── useSpeechToText.ts   # 음성 인식 (Web Speech API)
+│   │   ├── useTextToSpeech.ts   # 음성 합성 (Supertonic TTS)
+│   │   ├── useFaceDetection.ts  # 얼굴 인식
+│   │   ├── useSessionTimer.ts   # 세션 타이머
+│   │   └── useAIStatus.ts       # AI 상태 관리
 │   ├── store/            # Zustand stores
 │   │   ├── kioskStore.ts # 키오스크 상태 머신
 │   │   ├── orderStore.ts # 주문 상태
