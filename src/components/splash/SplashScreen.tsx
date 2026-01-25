@@ -212,6 +212,139 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
 
   const fhd = orientation === 'landscape' ? FHD_LANDSCAPE : FHD_PORTRAIT;
 
+  // 모바일에서는 전체 화면 사용 (FHD 스케일링 없음)
+  if (isMobile) {
+    return (
+      <div className={`${styles.container} ${styles.mobileContainer}`}>
+        {/* Subtle grain texture */}
+        <div className={styles.grain} />
+
+        {/* Ambient glow */}
+        <div className={`${styles.ambientGlow} ${isReady ? styles.glowReady : ''}`} />
+
+        {/* Loading View */}
+        <div className={`${styles.loadingView} ${!isLoading ? styles.loadingHidden : ''}`}>
+          <div className={styles.loadingBrand}>
+            {BrandSection}
+          </div>
+
+          <div className={styles.loader}>
+            <div className={styles.progressContainer}>
+              <div
+                className={styles.progressBar}
+                style={{ width: `${progress}%` }}
+              />
+              <div className={styles.progressGlow} style={{ left: `${progress}%` }} />
+            </div>
+
+            <div className={styles.status}>
+              <span className={styles.message}>{loadingMessage}</span>
+              <span className={styles.percentage}>{Math.round(progress)}%</span>
+            </div>
+
+            <div className={styles.loadingFooter}>
+              <p>음성 주문 시스템을 준비하고 있습니다</p>
+              <p className={styles.hint}>
+                {isCached ? '캐시된 모델을 사용합니다' : '잠시만 기다려 주세요...'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Ready View - Mobile optimized */}
+        <div className={`${styles.readyView} ${isReady ? styles.readyVisible : ''}`}>
+          <div className={styles.readyBrand}>
+            {BrandSection}
+          </div>
+
+          <div className={styles.mainContent}>
+            <p className={styles.heroDesc}>
+              100% 브라우저 기반 AI 음성 주문 시스템
+              <br />
+              <span className={styles.highlight}>서버 없이, 로컬에서 실행</span>
+            </p>
+
+            <div className={styles.techPills}>
+              <span className={styles.techPill}>
+                <span className={styles.pillIcon}>👁️</span>
+                <span>MediaPipe</span>
+              </span>
+              <span className={styles.techPill}>
+                <span className={styles.pillIcon}>🎤</span>
+                <span>Web Speech</span>
+              </span>
+            </div>
+
+            <button className={styles.startButton} onClick={handleStart}>
+              <span className={styles.startIcon}>☕</span>
+              <span>시작하기</span>
+            </button>
+
+            <div className={styles.divider} />
+
+            <div className={styles.featuresRow}>
+              <div className={styles.featureItem}>
+                <span className={styles.featureIcon}>👁️</span>
+                <div>
+                  <strong>얼굴 인식</strong>
+                  <p>자동 시작</p>
+                </div>
+              </div>
+              <div className={styles.featureItem}>
+                <span className={styles.featureIcon}>🎤</span>
+                <div>
+                  <strong>음성 주문</strong>
+                  <p>한국어</p>
+                </div>
+              </div>
+              <div className={styles.featureItem}>
+                <span className={styles.featureIcon}>🔊</span>
+                <div>
+                  <strong>음성 응답</strong>
+                  <p>TTS</p>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.scenarioSection}>
+              <h3 className={styles.sectionLabel}>테스트 시나리오</h3>
+              <div className={styles.scenarioGrid}>
+                <div className={styles.scenarioCard}>
+                  <span className={styles.scenarioNum}>01</span>
+                  <p>&quot;아이스 아메리카노 한 잔&quot;</p>
+                </div>
+                <div className={styles.scenarioCard}>
+                  <span className={styles.scenarioNum}>02</span>
+                  <p>&quot;카페라떼 하나요&quot;</p>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.notices}>
+              <div className={styles.noticeItem}>
+                <span className={styles.noticeIcon}>🌐</span>
+                <span><strong>Chrome</strong> 권장</span>
+              </div>
+              <div className={styles.noticeDot} />
+              <div className={styles.noticeItem}>
+                <span className={styles.noticeIcon}>⏱️</span>
+                <span>30초 리셋</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <footer className={styles.footer}>
+          <p>AI Cafe · Midnight Roast</p>
+          <p className={styles.footerCredit}>
+            Made by <a href="https://stomx.net/about" target="_blank" rel="noopener noreferrer">Jaymon</a>
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="kiosk-viewport">
       <div

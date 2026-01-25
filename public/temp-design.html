@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1200, height=630, initial-scale=1.0">
+    <title>AI Cafe OG Image</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Serif+KR:wght@300;600&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 1200px;
+            height: 630px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Cinzel', serif;
+            color: #C9A962;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Art Deco Border Frame */
+        .border-frame {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            right: 24px;
+            bottom: 24px;
+            border: 2px solid #C9A962;
+            pointer-events: none;
+        }
+        .border-frame::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            right: 4px;
+            bottom: 4px;
+            border: 1px solid rgba(201, 169, 98, 0.5);
+        }
+
+        /* Corner Accents */
+        .corner {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #C9A962;
+            transition: all 0.3s ease;
+        }
+        .top-left { top: 24px; left: 24px; border-right: none; border-bottom: none; }
+        .top-right { top: 24px; right: 24px; border-left: none; border-bottom: none; }
+        .bottom-left { bottom: 24px; left: 24px; border-right: none; border-top: none; }
+        .bottom-right { bottom: 24px; right: 24px; border-left: none; border-top: none; }
+
+        .logo-container {
+            margin-bottom: 32px;
+            position: relative;
+        }
+        
+        /* Sunburst/Glow behind logo */
+        .glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(201, 169, 98, 0.15) 0%, transparent 70%);
+            z-index: -1;
+        }
+
+        h1 {
+            font-size: 84px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: 0.05em;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            background: linear-gradient(to bottom, #E5C578 0%, #C9A962 50%, #8C7335 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tagline {
+            font-size: 24px;
+            letter-spacing: 0.5em;
+            text-transform: uppercase;
+            margin-top: 16px;
+            margin-bottom: 48px;
+            opacity: 0.9;
+            border-bottom: 1px solid #C9A962;
+            padding-bottom: 8px;
+            display: inline-block;
+        }
+
+        .subtitle {
+            font-family: 'Noto Serif KR', serif;
+            font-size: 32px;
+            font-weight: 300;
+            color: #e0e0e0;
+            opacity: 0.9;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* SVG Styles */
+        svg {
+            drop-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="border-frame"></div>
+    <div class="corner top-left"></div>
+    <div class="corner top-right"></div>
+    <div class="corner bottom-left"></div>
+    <div class="corner bottom-right"></div>
+
+    <div class="logo-container">
+        <div class="glow"></div>
+        <svg width="140" height="140" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Cup Body -->
+            <path d="M16 24h28c0 16-6 24-14 24S16 40 16 24z" fill="url(#goldGradient)" opacity="0.1"/>
+            <path d="M16 24h28c0 16-6 24-14 24S16 40 16 24z" stroke="url(#goldStroke)" stroke-width="2"/>
+            
+            <!-- Handle -->
+            <path d="M44 28c4 0 8 2 8 8s-4 8-8 8" stroke="url(#goldStroke)" stroke-width="2"/>
+            
+            <!-- Steam -->
+            <path d="M24 16c0-4 4-4 4-8M32 16c0-5 0-5 0-9M40 16c0-4-4-4-4-8" stroke="url(#goldStroke)" stroke-width="1.5" stroke-linecap="round"/>
+
+            <defs>
+                <linearGradient id="goldGradient" x1="16" y1="24" x2="44" y2="48" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#C9A962"/>
+                    <stop offset="1" stop-color="#8C7335"/>
+                </linearGradient>
+                <linearGradient id="goldStroke" x1="16" y1="0" x2="44" y2="64" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#E5C578"/>
+                    <stop offset="0.5" stop-color="#C9A962"/>
+                    <stop offset="1" stop-color="#8C7335"/>
+                </linearGradient>
+            </defs>
+        </svg>
+    </div>
+
+    <h1>AI Cafe</h1>
+    <div class="tagline">Midnight Roast</div>
+    <div class="subtitle">100% 브라우저 기반 AI 음성 주문</div>
+
+</body>
+</html>

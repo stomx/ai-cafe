@@ -12,6 +12,15 @@
   overflow: hidden;
 }
 
+/* Mobile Container - 전체 화면 사용 */
+.mobileContainer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
+}
+
 /* Grain Texture Overlay */
 .grain {
   position: absolute;
