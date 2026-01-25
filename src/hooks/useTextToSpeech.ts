@@ -35,6 +35,15 @@ interface UseTextToSpeechReturn {
 let supertonicInstance: SupertonicTTS | null = null;
 let supertonicLoadPromise: Promise<boolean> | null = null;
 
+// 모바일 기기 감지 (ONNX 로딩 건너뛰기 용)
+const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const isMobile = window.innerWidth <= 768;
+  const isPortraitScreen = window.innerHeight > window.innerWidth;
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  return isMobile || (isPortraitScreen && isTouchDevice);
+};
+
 export function useTextToSpeech(options: UseTextToSpeechOptions = {}): UseTextToSpeechReturn {
   const {
     language = 'ko-KR',
@@ -90,6 +99,14 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}): UseTextTo
 
   // Load Supertonic TTS engine
   const loadSupertonic = useCallback(async (): Promise<boolean> => {
+    // 모바일에서는 ONNX 로딩 건너뛰기 (메모리 부족으로 크래시 방지)
+    if (isMobileDevice()) {
+      console.log('[TTS] 모바일 기기 감지 - Supertonic 로딩 건너뛰기, Web Speech API 사용');
+      setEngineName('webspeech');
+      setModelStatus('tts', 'fallback');
+      return false;
+    }
+
     // Return existing promise if already loading
     if (supertonicLoadPromise) {
       return supertonicLoadPromise;

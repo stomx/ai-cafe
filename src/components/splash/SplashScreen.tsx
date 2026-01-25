@@ -12,6 +12,15 @@ const FHD_PORTRAIT = { width: 1080, height: 1920 };
 
 type Phase = 'loading' | 'transitioning' | 'ready';
 
+// 모바일 기기 감지 (ONNX 로딩 건너뛰기 용)
+const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const isMobile = window.innerWidth <= 768;
+  const isPortraitScreen = window.innerHeight > window.innerWidth;
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  return isMobile || (isPortraitScreen && isTouchDevice);
+};
+
 interface SplashScreenProps {
   onStart: () => void;
   skipLoading?: boolean;
@@ -23,6 +32,7 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
   const [progress, setProgress] = useState(0);
   const [isCached, setIsCached] = useState(false);
   const [isOrientationReady, setIsOrientationReady] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const orientation = useLayoutStore((state) => state.orientation);
   const initOrientation = useLayoutStore((state) => state.initOrientation);
   const [scale, setScale] = useState(1);
@@ -39,9 +49,10 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
     setScale(newScale);
   }, [orientation]);
 
-  // 먼저 orientation 초기화 (TTS 로딩 전에 완료)
+  // 먼저 orientation 초기화 및 모바일 감지 (TTS 로딩 전에 완료)
   useEffect(() => {
     initOrientation();
+    setIsMobile(isMobileDevice());
     setIsOrientationReady(true);
   }, [initOrientation]);
 
@@ -75,6 +86,30 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
 
     const startLoading = async () => {
       try {
+        // 모바일에서는 ONNX 로딩 건너뛰기 (메모리 부족으로 크래시 방지)
+        if (isMobile) {
+          console.log('[SplashScreen] 모바일 기기 감지 - Web Speech API 사용');
+          setLoadingMessage('모바일 음성 엔진 준비 중...');
+          setProgress(50);
+
+          // 짧은 딜레이 후 바로 준비 완료
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          if (!mounted) return;
+          setProgress(100);
+          setLoadingMessage('준비 완료!');
+
+          setTimeout(() => {
+            if (mounted) setPhase('transitioning');
+          }, 400);
+
+          setTimeout(() => {
+            if (mounted) setPhase('ready');
+          }, 1000);
+          return;
+        }
+
+        // 데스크톱: ONNX TTS 로딩
         const cacheInfo = await getTTSCacheInfo();
         if (mounted && cacheInfo.cached) {
           setIsCached(true);
@@ -127,7 +162,7 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
     return () => {
       mounted = false;
     };
-  }, [loadSupertonic, skipLoading, isOrientationReady]);
+  }, [loadSupertonic, skipLoading, isOrientationReady, isMobile]);
 
   const isLoading = phase === 'loading';
   const isReady = phase === 'ready';
