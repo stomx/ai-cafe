@@ -41,6 +41,7 @@ export interface StyleTensors {
 export interface SpeakOptions {
   voice?: string;
   speed?: number;
+  volume?: number;  // 0.0 ~ 2.0+, 기본값 1.5
   totalStep?: number;
   silenceDuration?: number;
   onProgress?: (step: number, total: number) => void;

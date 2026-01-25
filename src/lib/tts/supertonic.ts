@@ -501,6 +501,8 @@ export class SupertonicTTS implements TTSEngine {
   private currentStyle: StyleTensors | null = null;
   private audioContext: AudioContext | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
+  private gainNode: GainNode | null = null;
+  private _volume: number = 1.5; // 기본 음량 1.5배
 
   private basePath: string;
 
@@ -629,6 +631,7 @@ export class SupertonicTTS implements TTSEngine {
     const {
       voice = '/tts/voice_styles/F1.json',
       speed = 1.05,
+      volume = 1.5,
       totalStep = 20,
       silenceDuration = 0.3,
       onProgress,
@@ -636,6 +639,9 @@ export class SupertonicTTS implements TTSEngine {
       onEnd,
       onError,
     } = options;
+
+    // Set volume
+    this._volume = volume;
 
     try {
       this._isSpeaking = true;
@@ -880,6 +886,13 @@ export class SupertonicTTS implements TTSEngine {
       await this.audioContext.resume();
     }
 
+    // Create or update GainNode for volume control
+    if (!this.gainNode) {
+      this.gainNode = this.audioContext.createGain();
+      this.gainNode.connect(this.audioContext.destination);
+    }
+    this.gainNode.gain.value = this._volume;
+
     // Create audio buffer
     const audioBuffer = this.audioContext.createBuffer(1, audioData.length, this._sampleRate);
     const channelData = audioBuffer.getChannelData(0);
@@ -887,11 +900,11 @@ export class SupertonicTTS implements TTSEngine {
       channelData[i] = audioData[i];
     }
 
-    // Play
+    // Play through GainNode
     return new Promise((resolve) => {
       this.currentSource = this.audioContext!.createBufferSource();
       this.currentSource.buffer = audioBuffer;
-      this.currentSource.connect(this.audioContext!.destination);
+      this.currentSource.connect(this.gainNode!);
       this.currentSource.onended = () => {
         this.currentSource = null;
         resolve();

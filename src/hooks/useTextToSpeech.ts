@@ -228,6 +228,7 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}): UseTextTo
     await supertonicInstance.speak(text, lang as Language, {
       voice,
       speed: rate,
+      volume: 1.5, // Supertonic 기본 음량 1.5배
       onStart: () => {
         console.log('[TTS] Supertonic speaking:', text.substring(0, 50) + '...');
         setIsSpeaking(true);
