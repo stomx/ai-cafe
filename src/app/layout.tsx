@@ -13,8 +13,9 @@ export const metadata: Metadata = {
   description:
     "100% 브라우저 기반 AI 음성 인식 커피 주문 시스템. 서버 없이 로컬에서 실행되는 스마트 키오스크.",
   keywords: ["AI", "음성 주문", "키오스크", "커피", "카페", "음성 인식"],
-  authors: [{ name: "AI Cafe" }],
-  creator: "AI Cafe",
+  authors: [{ name: "Jaymon", url: "https://stomx.net/about" }],
+  creator: "Jaymon",
+  publisher: "stomx.net",
   alternates: {
     canonical: "/",
   },
@@ -57,11 +58,16 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
   name: "AI Cafe",
-  description:
-    "100% 브라우저 기반 AI 음성 인식 커피 주문 시스템",
+  description: "100% 브라우저 기반 AI 음성 인식 커피 주문 시스템",
   url: siteUrl,
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web Browser",
+  author: {
+    "@type": "Person",
+    name: "Jaymon",
+    url: "https://stomx.net/about",
+    sameAs: ["https://stomx.net"],
+  },
   offers: {
     "@type": "Offer",
     price: "0",

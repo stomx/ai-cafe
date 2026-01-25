@@ -609,11 +609,30 @@
 }
 
 .footer p {
-  font-size: 0.65rem;
-  color: rgba(255, 255, 255, 0.2);
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   margin: 0;
+}
+
+.footerCredit {
+  margin-top: 0.35rem !important;
+  font-size: 0.7rem !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  text-transform: none !important;
+  letter-spacing: 0.02em !important;
+}
+
+.footerCredit a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.footerCredit a:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 /* ========================================

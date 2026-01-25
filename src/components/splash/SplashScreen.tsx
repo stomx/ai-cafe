@@ -326,6 +326,9 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
           {/* Footer */}
           <footer className={styles.footer}>
             <p>AI Cafe · Midnight Roast Edition</p>
+            <p className={styles.footerCredit}>
+              Made by <a href="https://stomx.net/about" target="_blank" rel="noopener noreferrer">Jaymon</a> · <a href="https://stomx.net" target="_blank" rel="noopener noreferrer">stomx.net</a>
+            </p>
           </footer>
         </div>
       </div>
