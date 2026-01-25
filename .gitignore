@@ -41,3 +41,14 @@ next-env.d.ts
 # TTS ONNX models (download separately)
 public/tts/onnx/*.onnx
 .env.local
+
+# TTS models and voice styles (download separately)
+public/tts/onnx/
+public/tts/voice_styles/
+
+# Server logs
+server.log
+server_node.log
+
+# Temp files
+public/temp-*.html
