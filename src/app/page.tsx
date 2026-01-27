@@ -18,6 +18,13 @@ import { useChatStore } from '@/store/chatStore';
 import { onTTSStart, onTTSEnd, resetEchoFilter } from '@/utils/echoFilter';
 import { playMicOnSound, playMicOffSound } from '@/utils/soundEffects';
 import type { MenuItem } from '@/types/menu';
+import type { OrderIntent } from '@/lib/gemini/types';
+import dynamic from 'next/dynamic';
+
+// QA 패널을 동적으로 로드 (클라이언트 사이드만)
+const QAControlPanel = dynamic(() => import('@/components/debug/QAControlPanel'), {
+  ssr: false,
+});
 
 const SESSION_WARNING = 10; // 세션 종료 임박 경고 (초)
 
@@ -84,6 +91,11 @@ export default function Home() {
   // 얼굴 인식 On/Off (기본값 false, 스플래시 화면에서 설정)
   const [faceDetectionEnabled, setFaceDetectionEnabled] = useState(false);
 
+  // QA 패널 관련 state
+  const [lastIntent, setLastIntent] = useState<OrderIntent | null>(null);
+  const [lastTTSMessage, setLastTTSMessage] = useState<string>('');
+  const isQAPanelEnabled = process.env.NEXT_PUBLIC_QA_PANEL_ENABLED === 'true';
+
   const hasAutoStartedRef = useRef(false);
   const speakRef = useRef<(text: string) => void>(() => {});
   const stopTTSRef = useRef<() => void>(() => {});
@@ -148,6 +160,8 @@ export default function Home() {
     handleVoiceTemperatureSelect,
     interimMessageIdRef,
     resetState: resetVoiceProcessor,
+    lastIntent: voiceLastIntent,
+    simulateVoiceInput,
   } = useVoiceOrderProcessor({
     speakRef,
     resetActivity,
@@ -177,6 +191,13 @@ export default function Home() {
 
   // Keep resetVoiceProcessorRef updated for use in handleSessionTimeout
   resetVoiceProcessorRef.current = resetVoiceProcessor;
+
+  // QA 패널용: Intent 동기화
+  useEffect(() => {
+    if (voiceLastIntent) {
+      setLastIntent(voiceLastIntent);
+    }
+  }, [voiceLastIntent]);
 
   // 얼굴 인식 토글
   const toggleFaceDetection = useCallback(() => {
@@ -285,6 +306,7 @@ export default function Home() {
   // TTS 래퍼 - 에코 필터에 텍스트 전달
   const speakWithEchoFilter = useCallback((text: string) => {
     onTTSStart(text);
+    setLastTTSMessage(text); // QA 패널용
     speak(text);
   }, [speak]);
 
@@ -813,6 +835,15 @@ export default function Home() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* QA Control Panel (개발 환경에서만) */}
+      {isQAPanelEnabled && (
+        <QAControlPanel
+          onTranscriptSubmit={simulateVoiceInput}
+          lastIntent={lastIntent}
+          lastTTSMessage={lastTTSMessage}
+        />
       )}
     </>
   );

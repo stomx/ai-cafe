@@ -8,6 +8,7 @@ import { matchVoiceToMenu, formatOrderConfirmation, type MatchedOrder } from '@/
 import { isEcho } from '@/utils/echoFilter';
 import { useOrderActions } from './useOrderActions';
 import { useGeminiOrder } from './useGeminiOrder';
+import type { OrderIntent } from '@/lib/gemini/types';
 
 type VoiceState = 'idle' | 'listening' | 'timeout' | 'success';
 
@@ -117,6 +118,10 @@ interface UseVoiceOrderProcessorReturn {
   interimMessageIdRef: React.MutableRefObject<string | null>;
   /** 상태 초기화 (세션 종료 시 사용) */
   resetState: () => void;
+  /** 마지막 처리된 Intent (QA 패널용) */
+  lastIntent: OrderIntent | null;
+  /** 음성 입력 시뮬레이션 핸들러 (QA 패널용) */
+  simulateVoiceInput: (transcript: string) => Promise<void>;
 }
 
 export function useVoiceOrderProcessor({
@@ -138,6 +143,7 @@ export function useVoiceOrderProcessor({
   }>>([]);
   const interimMessageIdRef = useRef<string | null>(null);
   const isProcessingGeminiRef = useRef(false);
+  const [lastIntent, setLastIntent] = useState<OrderIntent | null>(null);
 
   // Order store
   const addItem = useOrderStore((state) => state.addItem);
@@ -488,6 +494,11 @@ export function useVoiceOrderProcessor({
           .then((result) => {
             console.log('[VoiceOrderProcessor] Gemini result:', result);
 
+            // Intent 캡처 (QA 패널용)
+            if (result.intent) {
+              setLastIntent(result.intent);
+            }
+
             if (result.temperatureConflicts && result.temperatureConflicts.length > 0) {
               setTemperatureConflicts(result.temperatureConflicts);
             }
@@ -603,7 +614,15 @@ export function useVoiceOrderProcessor({
     setTemperatureConflicts([]);
     setPendingAddedItems([]);
     interimMessageIdRef.current = null;
+    setLastIntent(null);
   }, []);
+
+  // QA 패널용: 음성 입력 시뮬레이션
+  const simulateVoiceInput = useCallback(async (transcript: string) => {
+    console.log('[VoiceOrderProcessor] Simulating voice input:', transcript);
+    // 최종 음성 인식 결과로 처리
+    handleSpeechResult(transcript, true);
+  }, [handleSpeechResult]);
 
   return {
     voiceState,
@@ -615,5 +634,7 @@ export function useVoiceOrderProcessor({
     handleVoiceTemperatureSelect,
     interimMessageIdRef,
     resetState,
+    lastIntent,
+    simulateVoiceInput,
   };
 }

@@ -17,6 +17,7 @@ interface ProcessResult {
   };
   temperatureConflicts?: MatchedOrder[];
   fallback?: boolean;
+  intent?: OrderIntent; // QA 패널용
 }
 
 interface UseGeminiOrderOptions {
@@ -424,13 +425,15 @@ export function useGeminiOrder({
       console.log('[Gemini] Intent analyzed:', intent);
 
       // confidence가 낮으면 폴백
-      if (intent.confidence < 0.5) {
+      // UNKNOWN 타입은 confidence가 낮아도 그대로 반환 (의도적인 거부)
+      if (intent.confidence < 0.4 && intent.type !== 'UNKNOWN') {
         console.log('[Gemini] Low confidence, using fallback');
         return fallbackToMenuMatcher(transcript, new Error(`Low confidence: ${intent.confidence}`));
       }
 
       // 의도에 따른 CTA 실행
-      return executeIntent(intent);
+      const result = executeIntent(intent);
+      return { ...result, intent }; // Intent 포함
     } catch (error) {
       // 에러 시 폴백
       const err = error instanceof Error ? error : new Error('Unknown error');
