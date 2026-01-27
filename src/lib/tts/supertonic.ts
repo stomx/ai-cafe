@@ -632,7 +632,7 @@ export class SupertonicTTS implements TTSEngine {
       voice = '/tts/voice_styles/F1.json',
       speed = 1.2,
       volume = 1.5,
-      totalStep = 10,
+      totalStep = 30,
       silenceDuration = 0.3,
       onProgress,
       onStart,
