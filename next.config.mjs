@@ -3,6 +3,8 @@
 const isProduction = process.env.NODE_ENV === 'production';
 
 const nextConfig = {
+  // Turbopack 설정 (Next.js 16+ 기본 번들러)
+  turbopack: {},
   // Static Export는 프로덕션 빌드에서만 적용
   ...(isProduction && { output: 'export' }),
   images: {
