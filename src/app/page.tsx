@@ -210,8 +210,8 @@ export default function Home() {
   // 픽업 안내용 TTS (F2 음성)
   const { speak: speakPickup } = useTextToSpeech({
     language: 'ko-KR',
-    rate: 1.0,
-    voice: '/tts/voice_styles/F2.json',
+    rate: 1.1,
+    voice: '/tts/voice_styles/F1.json',
   });
 
   // Keep stopTTSRef updated
