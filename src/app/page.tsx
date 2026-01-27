@@ -13,7 +13,7 @@ import { useTextToSpeech } from '@/hooks/useTextToSpeech';
 import { useSessionTimer } from '@/hooks/useSessionTimer';
 import { useVoiceOrderProcessor } from '@/hooks/useVoiceOrderProcessor';
 import { useOrderStore } from '@/store/orderStore';
-import { useQueueStore } from '@/store/queueStore';
+import { useQueueStore, setOnReadyCallback } from '@/store/queueStore';
 import { useChatStore } from '@/store/chatStore';
 import { onTTSStart, onTTSEnd, resetEchoFilter } from '@/utils/echoFilter';
 import { playMicOnSound, playMicOffSound } from '@/utils/soundEffects';
@@ -37,6 +37,7 @@ export default function Home() {
   const hasShownMicTimeoutRef = useRef(false);
   const hasShownSessionWarningRef = useRef(false);
   const prevItemsRef = useRef<typeof items>([]);
+  const isOrderConfirmingRef = useRef(false); // 주문 확정 중 플래그 (삭제 알림 방지)
 
   const addItem = useOrderStore((state) => state.addItem);
   const items = useOrderStore((state) => state.items);
@@ -154,15 +155,36 @@ export default function Home() {
     }
   }, [sttState, setVoiceState]);
 
-  // Text-to-Speech with echo filter callbacks
+  // Text-to-Speech with echo filter callbacks (기본 음성 F1)
   const { speak, stop: stopTTS } = useTextToSpeech({
     language: 'ko-KR',
     rate: 1.1,
+    voice: '/tts/voice_styles/F1.json',
     onEnd: onTTSEnd, // 에코 필터에 TTS 종료 알림
+  });
+
+  // 픽업 안내용 TTS (F2 음성)
+  const { speak: speakPickup } = useTextToSpeech({
+    language: 'ko-KR',
+    rate: 1.0,
+    voice: '/tts/voice_styles/F2.json',
   });
 
   // Keep stopTTSRef updated
   stopTTSRef.current = stopTTS;
+
+  // 픽업 대기 안내 콜백 설정
+  useEffect(() => {
+    setOnReadyCallback((orderNumber: number) => {
+      const msg = `${orderNumber}번 주문이 준비되었습니다. 픽업대에서 찾아가 주세요.`;
+      addAssistantResponse(msg);
+      speakPickup(msg);
+    });
+
+    return () => {
+      setOnReadyCallback(null);
+    };
+  }, [speakPickup, addAssistantResponse]);
 
   // TTS 래퍼 - 에코 필터에 텍스트 전달
   const speakWithEchoFilter = useCallback((text: string) => {
@@ -263,8 +285,13 @@ export default function Home() {
       changeType = 'add';
       changedItem = items[items.length - 1];
     }
-    // 아이템 삭제 감지
+    // 아이템 삭제 감지 (주문 확정 중에는 무시)
     else if (items.length < prevItems.length) {
+      // 주문 확정으로 인한 삭제는 알림 안 함
+      if (isOrderConfirmingRef.current) {
+        isOrderConfirmingRef.current = false;
+        return;
+      }
       changeType = 'remove';
       const removedItem = prevItems.find(prev => !items.some(curr => curr.id === prev.id));
       if (removedItem) {
@@ -382,6 +409,7 @@ export default function Home() {
     if (items.length === 0) return;
 
     stopTTSRef.current(); // TTS 중지
+    isOrderConfirmingRef.current = true; // 주문 확정 중 플래그 (삭제 알림 방지)
     // 세션 타이머 정지
     stopSession();
 
