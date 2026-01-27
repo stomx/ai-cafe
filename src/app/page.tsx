@@ -19,7 +19,6 @@ import { onTTSStart, onTTSEnd, resetEchoFilter } from '@/utils/echoFilter';
 import { playMicOnSound, playMicOffSound } from '@/utils/soundEffects';
 import type { MenuItem } from '@/types/menu';
 
-const VOICE_TIMEOUT = 30; // 음성 입력 종료 시점 (세션 잔여 시간 기준, 초)
 const SESSION_WARNING = 10; // 세션 종료 임박 경고 (초)
 
 // 숫자를 한글 자릿수로 변환 (1001 → "일공공일")
@@ -292,22 +291,6 @@ export default function Home() {
     }
   }, [sttState]);
 
-  // 15초 이하가 되면 음성 입력 대기 종료 + 알림 메시지
-  // 30초~16초: 음성 입력 대기 유지, 15초 이하: 음성 입력 끔
-  useEffect(() => {
-    if (isSessionActive && sessionTimeLeft <= VOICE_TIMEOUT && isListening) {
-      console.log(`[Page] Session time ${sessionTimeLeft}s <= ${VOICE_TIMEOUT}s, stopping voice input`);
-      stopListening();
-
-      // 한 번만 알림 (handleSilenceTimeout과 중복 방지)
-      if (!hasShownMicTimeoutRef.current) {
-        hasShownMicTimeoutRef.current = true;
-        const msg = '음성 입력이 없어서 마이크를 껐습니다. 음성으로 주문하기를 누른 후 음성으로 주문하거나 버튼을 눌러 주문해주세요.';
-        addAssistantResponse(msg);
-        speakRef.current(msg);
-      }
-    }
-  }, [isSessionActive, sessionTimeLeft, isListening, stopListening, addAssistantResponse]);
 
   // 10초 남으면 세션 종료 임박 경고
   useEffect(() => {
