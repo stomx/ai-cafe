@@ -28,6 +28,43 @@ const numberToKoreanDigits = (num: number): string => {
   return String(num).split('').map(d => digits[parseInt(d)]).join('');
 };
 
+// 금액을 한글로 변환 (20000 → "이만", 4500 → "사천오백")
+const numberToKoreanPrice = (num: number): string => {
+  if (num === 0) return '영';
+
+  const units = ['', '만', '억']; // 만 단위까지만 지원
+  const smallUnits = ['', '십', '백', '천'];
+  const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+
+  let result = '';
+  let unitIndex = 0;
+
+  while (num > 0) {
+    const chunk = num % 10000; // 4자리씩 처리
+    if (chunk > 0) {
+      let chunkStr = '';
+      let tempChunk = chunk;
+
+      for (let i = 0; i < 4 && tempChunk > 0; i++) {
+        const digit = tempChunk % 10;
+        if (digit > 0) {
+          // 1인 경우 십, 백, 천 앞에서는 생략 (단, 일의 자리는 제외)
+          const digitStr = (digit === 1 && i > 0) ? '' : digits[digit];
+          chunkStr = digitStr + smallUnits[i] + chunkStr;
+        }
+        tempChunk = Math.floor(tempChunk / 10);
+      }
+
+      result = chunkStr + units[unitIndex] + result;
+    }
+
+    num = Math.floor(num / 10000);
+    unitIndex++;
+  }
+
+  return result;
+};
+
 export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
   const [showTemperatureModal, setShowTemperatureModal] = useState(false);
@@ -426,7 +463,7 @@ export default function Home() {
         const tempStr = item.temperature ? ` ${item.temperature}` : '';
         return `${item.name}${tempStr} ${item.quantity}잔`;
       }).join(', ');
-      const msg = `${itemList}. 총 ${total.toLocaleString()}원입니다. 결제하시겠어요?`;
+      const msg = `${itemList}. 총 ${numberToKoreanPrice(total)}원입니다. 결제하시겠어요?`;
       addAssistantResponse(msg);
       speakRef.current(msg);
     }, 100);
