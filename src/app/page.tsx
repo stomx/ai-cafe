@@ -33,8 +33,10 @@ export default function Home() {
 
   const hasAutoStartedRef = useRef(false);
   const speakRef = useRef<(text: string) => void>(() => {});
+  const stopTTSRef = useRef<() => void>(() => {});
   const hasShownMicTimeoutRef = useRef(false);
   const hasShownSessionWarningRef = useRef(false);
+  const prevItemsRef = useRef<typeof items>([]);
 
   const addItem = useOrderStore((state) => state.addItem);
   const items = useOrderStore((state) => state.items);
@@ -114,6 +116,8 @@ export default function Home() {
   }, [addAssistantResponse, setVoiceState, interimMessageIdRef]);
 
   const handleSpeechStart = useCallback(() => {
+    // 음성 입력 시작 시 TTS 중지
+    stopTTSRef.current();
     // voiceState는 sttState에서 동기화되므로 여기서 설정 불필요
     // 주의: 여기서 resetActivity를 호출하면 TTS 에코가 마이크에 잡힐 때도 타이머가 리셋됨
     // 대신 handleSpeechResult에서 에코 필터 후 resetActivity 호출
@@ -151,11 +155,14 @@ export default function Home() {
   }, [sttState, setVoiceState]);
 
   // Text-to-Speech with echo filter callbacks
-  const { speak } = useTextToSpeech({
+  const { speak, stop: stopTTS } = useTextToSpeech({
     language: 'ko-KR',
     rate: 1.1,
     onEnd: onTTSEnd, // 에코 필터에 TTS 종료 알림
   });
+
+  // Keep stopTTSRef updated
+  stopTTSRef.current = stopTTS;
 
   // TTS 래퍼 - 에코 필터에 텍스트 전달
   const speakWithEchoFilter = useCallback((text: string) => {
@@ -233,7 +240,93 @@ export default function Home() {
     }
   }, [isSessionActive, sessionTimeLeft, addAssistantResponse]);
 
+  // 메뉴 변경 감지 및 TTS 재생 (디바운스 적용)
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastNotifiedItemsRef = useRef<string>('');
+
+  useEffect(() => {
+    const prevItems = prevItemsRef.current;
+    prevItemsRef.current = items;
+
+    // 스플래시 화면이면 무시
+    if (showSplash) return;
+
+    // 첫 렌더링이면 무시
+    if (prevItems.length === 0 && items.length === 0) return;
+
+    // 변경 유형 감지
+    let changeType: 'add' | 'remove' | 'update' | null = null;
+    let changedItem: typeof items[0] | null = null;
+
+    // 아이템 추가 감지
+    if (items.length > prevItems.length) {
+      changeType = 'add';
+      changedItem = items[items.length - 1];
+    }
+    // 아이템 삭제 감지
+    else if (items.length < prevItems.length) {
+      changeType = 'remove';
+      const removedItem = prevItems.find(prev => !items.some(curr => curr.id === prev.id));
+      if (removedItem) {
+        changedItem = removedItem;
+      }
+    }
+    // 수량 변경 감지
+    else if (items.length === prevItems.length && items.length > 0) {
+      for (const curr of items) {
+        const prev = prevItems.find(p => p.id === curr.id);
+        if (prev && curr.quantity !== prev.quantity) {
+          changeType = 'update';
+          changedItem = curr;
+          break;
+        }
+      }
+    }
+
+    if (!changeType || !changedItem) return;
+
+    // 추가/삭제는 즉시 알림
+    if (changeType === 'add' || changeType === 'remove') {
+      const tempStr = changedItem.temperature ? ` ${changedItem.temperature}` : '';
+      const msg = changeType === 'add'
+        ? `${changedItem.name}${tempStr} 추가했어요.`
+        : `${changedItem.name} 삭제했어요.`;
+      addAssistantResponse(msg);
+      speakRef.current(msg);
+      return;
+    }
+
+    // 수량 변경은 디바운스 적용
+    if (changeType === 'update') {
+      // 기존 타이머 취소
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
+      // 현재 상태를 스냅샷으로 저장
+      const itemSnapshot = { ...changedItem };
+
+      // 디바운스: 600ms 후 메시지 표시
+      debounceTimerRef.current = setTimeout(() => {
+        const tempStr = itemSnapshot.temperature ? ` ${itemSnapshot.temperature}` : '';
+        const msg = `${itemSnapshot.name}${tempStr} ${itemSnapshot.quantity}잔으로 변경했어요.`;
+
+        // 중복 알림 방지
+        const msgKey = `${itemSnapshot.id}-${itemSnapshot.quantity}`;
+        if (lastNotifiedItemsRef.current !== msgKey) {
+          lastNotifiedItemsRef.current = msgKey;
+          addAssistantResponse(msg);
+          speakRef.current(msg);
+        }
+
+        debounceTimerRef.current = null;
+      }, 600);
+    }
+  }, [items, showSplash, addAssistantResponse]);
+
   const handleSelectMenuItem = useCallback((item: MenuItem) => {
+    stopTTSRef.current(); // TTS 중지
     resetActivity(); // 활동 타이머 리셋
     // 사용자 터치 시 음성 입력 비활성화 (안내 없음)
     if (isListening) {
@@ -255,6 +348,7 @@ export default function Home() {
   }, [addItem, resetActivity, isListening, stopListening]);
 
   const handleSelectTemperature = useCallback((temp: 'HOT' | 'ICE') => {
+    stopTTSRef.current(); // TTS 중지
     resetActivity(); // 활동 타이머 리셋
     // 사용자 터치 시 음성 입력 비활성화 (안내 없음)
     if (isListening) {
@@ -287,6 +381,7 @@ export default function Home() {
   const handleConfirmOrder = useCallback(() => {
     if (items.length === 0) return;
 
+    stopTTSRef.current(); // TTS 중지
     // 세션 타이머 정지
     stopSession();
 
@@ -332,6 +427,7 @@ export default function Home() {
 
   const handleStartOrder = useCallback(() => {
     console.log('[Page] handleStartOrder called');
+    stopTTSRef.current(); // TTS 중지
     interimMessageIdRef.current = null;
     // 사용자 활동 시 경고 플래그 초기화 (다시 경고 가능하도록)
     hasShownMicTimeoutRef.current = false;
@@ -390,6 +486,7 @@ export default function Home() {
         onToggleFaceDetection={toggleFaceDetection}
         onScreenTouch={() => {
           if (isSessionActive) {
+            stopTTSRef.current(); // TTS 중지
             resetActivity();
             // 경고 플래그 초기화
             hasShownMicTimeoutRef.current = false;
@@ -470,7 +567,10 @@ export default function Home() {
               {temperatureConflicts[0].menuItem.temperatures.includes('HOT') && (
                 <button
                   className="voice-temp-btn voice-temp-hot"
-                  onClick={() => handleVoiceTemperatureSelect('HOT')}
+                  onClick={() => {
+                    stopTTSRef.current();
+                    handleVoiceTemperatureSelect('HOT');
+                  }}
                 >
                   <span>🔥</span>
                   <span>HOT</span>
@@ -479,7 +579,10 @@ export default function Home() {
               {temperatureConflicts[0].menuItem.temperatures.includes('ICE') && (
                 <button
                   className="voice-temp-btn voice-temp-ice"
-                  onClick={() => handleVoiceTemperatureSelect('ICE')}
+                  onClick={() => {
+                    stopTTSRef.current();
+                    handleVoiceTemperatureSelect('ICE');
+                  }}
                 >
                   <span>🧊</span>
                   <span>ICE</span>
