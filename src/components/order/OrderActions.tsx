@@ -29,7 +29,7 @@ export function OrderActions({ onConfirm, disabled }: OrderActionsProps) {
         disabled={disabled || itemCount === 0}
         className="order-confirm-btn"
       >
-        주문하기 ({itemCount}개)
+        주문확인 ({itemCount}개)
       </Button>
     </div>
   );

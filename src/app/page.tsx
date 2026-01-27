@@ -22,9 +22,16 @@ import type { MenuItem } from '@/types/menu';
 const VOICE_TIMEOUT = 30; // 음성 입력 종료 시점 (세션 잔여 시간 기준, 초)
 const SESSION_WARNING = 10; // 세션 종료 임박 경고 (초)
 
+// 숫자를 한글 자릿수로 변환 (1001 → "일공공일")
+const numberToKoreanDigits = (num: number): string => {
+  const digits = ['공', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+  return String(num).split('').map(d => digits[parseInt(d)]).join('');
+};
+
 export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
   const [showTemperatureModal, setShowTemperatureModal] = useState(false);
+  const [showOrderConfirmModal, setShowOrderConfirmModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [pendingOrders, setPendingOrders] = useState<{ menuItem: MenuItem; quantity: number }[]>([]);
 
@@ -176,9 +183,8 @@ export default function Home() {
   // 픽업 대기 안내 콜백 설정
   useEffect(() => {
     setOnReadyCallback((orderNumber: number) => {
-      const msg = `${orderNumber}번 주문이 준비되었습니다. 픽업대에서 찾아가 주세요.`;
-      addAssistantResponse(msg);
-      speakPickup(msg);
+      const orderNumKr = numberToKoreanDigits(orderNumber);
+      speakPickup(`${orderNumKr}번 주문이 준비되었습니다. 픽업대에서 찾아가 주세요.`);
     });
 
     return () => {
@@ -405,10 +411,33 @@ export default function Home() {
     }
   }, [selectedItem, addItem, pendingOrders, resetActivity, isListening, stopListening]);
 
+  // 주문확인 버튼 클릭 → 다이얼로그 표시 + TTS 안내
+  const handleShowOrderConfirm = useCallback(() => {
+    if (items.length === 0) return;
+
+    stopTTSRef.current(); // TTS 중지
+    resetActivity(); // 세션 타이머 리셋
+    setShowOrderConfirmModal(true);
+
+    // TTS로 주문 내역 안내 (TTS 중지 후 약간의 딜레이)
+    setTimeout(() => {
+      const total = items.reduce((sum, item) => sum + item.totalPrice, 0);
+      const itemList = items.map(item => {
+        const tempStr = item.temperature ? ` ${item.temperature}` : '';
+        return `${item.name}${tempStr} ${item.quantity}잔`;
+      }).join(', ');
+      const msg = `${itemList}. 총 ${total.toLocaleString()}원입니다. 결제하시겠어요?`;
+      addAssistantResponse(msg);
+      speakRef.current(msg);
+    }, 100);
+  }, [items, resetActivity, addAssistantResponse]);
+
+  // 다이얼로그에서 최종 확인 → 실제 주문 처리
   const handleConfirmOrder = useCallback(() => {
     if (items.length === 0) return;
 
     stopTTSRef.current(); // TTS 중지
+    setShowOrderConfirmModal(false);
     isOrderConfirmingRef.current = true; // 주문 확정 중 플래그 (삭제 알림 방지)
     // 세션 타이머 정지
     stopSession();
@@ -424,9 +453,7 @@ export default function Home() {
     setVoiceState('idle');
 
     setTimeout(() => {
-      const msg = '주문이 완료되었습니다! 잠시만 기다려주세요.';
-      addAssistantResponse(msg);
-      speakRef.current(msg);
+      speakRef.current('주문이 완료되었습니다! 잠시만 기다려주세요.');
     }, 500);
   }, [items, addToQueue, clearOrder, clearMessages, addAssistantResponse, stopSession, setVoiceState]);
 
@@ -491,7 +518,7 @@ export default function Home() {
         }
         orderSection={
           <OrderSection
-            onConfirmOrder={handleConfirmOrder}
+            onConfirmOrder={handleShowOrderConfirm}
             voiceState={voiceState}
             isListening={isListening}
             onStartListening={handleStartOrder}
@@ -573,6 +600,59 @@ export default function Home() {
                   <span>ICE</span>
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 주문확인 모달 */}
+      {showOrderConfirmModal && items.length > 0 && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            stopTTSRef.current();
+            setShowOrderConfirmModal(false);
+          }}
+        >
+          <div
+            className="modal-content order-confirm-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="modal-title">주문 확인</h3>
+            <div className="order-confirm-list">
+              {items.map((item) => (
+                <div key={item.id} className="order-confirm-item">
+                  <span className="order-confirm-name">
+                    {item.name}
+                    {item.temperature && <span className="order-confirm-temp">{item.temperature}</span>}
+                  </span>
+                  <span className="order-confirm-qty">{item.quantity}잔</span>
+                  <span className="order-confirm-price">{item.totalPrice.toLocaleString()}원</span>
+                </div>
+              ))}
+            </div>
+            <div className="order-confirm-total">
+              <span>총 금액</span>
+              <span className="order-confirm-total-price">
+                {items.reduce((sum, item) => sum + item.totalPrice, 0).toLocaleString()}원
+              </span>
+            </div>
+            <div className="modal-buttons order-confirm-buttons">
+              <button
+                className="order-confirm-cancel-btn"
+                onClick={() => {
+                  stopTTSRef.current();
+                  setShowOrderConfirmModal(false);
+                }}
+              >
+                취소
+              </button>
+              <button
+                className="order-confirm-submit-btn"
+                onClick={handleConfirmOrder}
+              >
+                주문하기
+              </button>
             </div>
           </div>
         </div>

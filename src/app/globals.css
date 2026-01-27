@@ -1263,6 +1263,125 @@ body::before {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   ORDER CONFIRM MODAL (주문 확인 모달)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.order-confirm-modal {
+  min-width: 420px;
+  max-width: 500px;
+  text-align: left;
+}
+
+.order-confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-lg) 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.order-confirm-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+}
+
+.order-confirm-name {
+  flex: 1;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.order-confirm-temp {
+  display: inline-block;
+  margin-left: var(--spacing-xs);
+  padding: 2px 8px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: rgba(201, 166, 107, 0.15);
+  color: var(--color-primary);
+}
+
+.order-confirm-qty {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  min-width: 40px;
+  text-align: center;
+}
+
+.order-confirm-price {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  min-width: 80px;
+  text-align: right;
+}
+
+.order-confirm-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
+}
+
+.order-confirm-total-price {
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.order-confirm-buttons {
+  gap: var(--spacing-md);
+}
+
+.order-confirm-cancel-btn {
+  flex: 1;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.order-confirm-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+}
+
+.order-confirm-submit-btn {
+  flex: 1;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-bg-primary);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(201, 166, 107, 0.3);
+}
+
+.order-confirm-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(201, 166, 107, 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    VOICE TEMPERATURE SELECT (음성 주문 시 온도 선택 UI)
    ═══════════════════════════════════════════════════════════════════════════ */
 

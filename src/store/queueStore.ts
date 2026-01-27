@@ -26,17 +26,33 @@ interface QueueStore {
   stopSimulation: () => void;
 }
 
+// 1001~9999 사이의 랜덤 주문번호 생성
+const generateRandomOrderNumber = (): number => {
+  return Math.floor(Math.random() * (9999 - 1001 + 1)) + 1001;
+};
+
 export const useQueueStore = create<QueueStore>((set, get) => ({
   preparingQueue: [],
   readyQueue: [],
-  nextOrderNumber: 1001,
+  nextOrderNumber: generateRandomOrderNumber(),
   simulationInterval: null,
 
   addToQueue: (items) => {
-    const { nextOrderNumber } = get();
+    // 랜덤 주문번호 생성 (기존 주문과 중복 방지)
+    const { preparingQueue, readyQueue } = get();
+    const existingNumbers = new Set([
+      ...preparingQueue.map(i => i.orderNumber),
+      ...readyQueue.map(i => i.orderNumber),
+    ]);
+
+    let orderNumber = generateRandomOrderNumber();
+    while (existingNumbers.has(orderNumber)) {
+      orderNumber = generateRandomOrderNumber();
+    }
+
     const newItem: QueueItem = {
-      id: `order-${nextOrderNumber}`,
-      orderNumber: nextOrderNumber,
+      id: `order-${orderNumber}`,
+      orderNumber,
       items,
       status: 'preparing',
       createdAt: new Date(),
@@ -45,7 +61,7 @@ export const useQueueStore = create<QueueStore>((set, get) => ({
 
     set((state) => ({
       preparingQueue: [...state.preparingQueue, newItem],
-      nextOrderNumber: state.nextOrderNumber + 1,
+      nextOrderNumber: generateRandomOrderNumber(), // 다음 번호도 랜덤
     }));
 
     return newItem;
@@ -95,25 +111,23 @@ export const useQueueStore = create<QueueStore>((set, get) => ({
       const { preparingQueue, moveToReady, readyQueue, completeOrder } = get();
       const now = new Date();
 
-      // 5초 경과한 준비중 주문 → 픽업 대기로 이동
-      const readyOrders = preparingQueue.filter((item) => {
+      // 10초 경과한 준비중 주문 → 픽업 대기로 이동
+      for (const item of preparingQueue) {
         const elapsed = (now.getTime() - new Date(item.createdAt).getTime()) / 1000;
-        return elapsed >= 5; // 5초
-      });
-
-      for (const ready of readyOrders) {
-        moveToReady(ready.id);
+        if (elapsed >= 10) {
+          console.log(`[Queue] 준비중 → 픽업대기: ${item.orderNumber}번 (${elapsed.toFixed(1)}초 경과)`);
+          moveToReady(item.id);
+        }
       }
 
-      // 5초 경과한 픽업 대기 주문 자동 제거
-      const expiredOrders = readyQueue.filter((item) => {
-        if (!item.readyAt) return false;
+      // 10초 경과한 픽업 대기 주문 자동 제거
+      for (const item of readyQueue) {
+        if (!item.readyAt) continue;
         const elapsed = (now.getTime() - new Date(item.readyAt).getTime()) / 1000;
-        return elapsed >= 5; // 5초
-      });
-
-      for (const expired of expiredOrders) {
-        completeOrder(expired.id);
+        if (elapsed >= 10) {
+          console.log(`[Queue] 픽업대기 → 완료: ${item.orderNumber}번 (${elapsed.toFixed(1)}초 경과)`);
+          completeOrder(item.id);
+        }
       }
     }, 1000); // 1초마다 체크
 
