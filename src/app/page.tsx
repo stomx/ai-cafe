@@ -202,7 +202,7 @@ export default function Home() {
   // Text-to-Speech with echo filter callbacks (기본 음성 F1)
   const { speak, stop: stopTTS } = useTextToSpeech({
     language: 'ko-KR',
-    rate: 1.1,
+    rate: 1.2,
     voice: '/tts/voice_styles/F1.json',
     onEnd: onTTSEnd, // 에코 필터에 TTS 종료 알림
   });
@@ -210,7 +210,7 @@ export default function Home() {
   // 픽업 안내용 TTS (F2 음성)
   const { speak: speakPickup } = useTextToSpeech({
     language: 'ko-KR',
-    rate: 1.1,
+    rate: 1.2,
     voice: '/tts/voice_styles/F1.json',
   });
 
