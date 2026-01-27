@@ -22,7 +22,7 @@ const isMobileDevice = (): boolean => {
 };
 
 interface SplashScreenProps {
-  onStart: () => void;
+  onStart: (cameraEnabled: boolean) => void;
   skipLoading?: boolean;
 }
 
@@ -33,6 +33,7 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
   const [isCached, setIsCached] = useState(false);
   const [isOrientationReady, setIsOrientationReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false); // 카메라 기본값 Off
   const orientation = useLayoutStore((state) => state.orientation);
   const initOrientation = useLayoutStore((state) => state.initOrientation);
   const [scale, setScale] = useState(1);
@@ -82,8 +83,8 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
   const handleStart = useCallback(() => {
     // iOS에서 Web Speech API 활성화 (사용자 인터랙션 컨텍스트 내에서 호출 필요)
     activateWebSpeech();
-    onStart();
-  }, [activateWebSpeech, onStart]);
+    onStart(cameraEnabled);
+  }, [activateWebSpeech, onStart, cameraEnabled]);
 
   // Start loading (orientation 초기화 후)
   useEffect(() => {
@@ -275,9 +276,25 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
               </span>
             </div>
 
+            {/* 카메라 토글 */}
+            <label className={styles.cameraToggle}>
+              <span className={styles.toggleLabel}>
+                <span className={styles.toggleIcon}>📷</span>
+                <span>카메라 (얼굴 인식)</span>
+              </span>
+              <div className={styles.toggleSwitch}>
+                <input
+                  type="checkbox"
+                  checked={cameraEnabled}
+                  onChange={(e) => setCameraEnabled(e.target.checked)}
+                />
+                <span className={styles.toggleSlider} />
+              </div>
+            </label>
+
             <button className={styles.startButton} onClick={handleStart}>
               <span className={styles.startIcon}>☕</span>
-              <span>시작하기</span>
+              <span>{cameraEnabled ? '카메라 켜고 시작' : '시작하기'}</span>
             </button>
 
             <div className={styles.divider} />
@@ -434,9 +451,25 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
                 </span>
               </div>
 
+              {/* 카메라 토글 */}
+              <label className={styles.cameraToggle}>
+                <span className={styles.toggleLabel}>
+                  <span className={styles.toggleIcon}>📷</span>
+                  <span>카메라 (얼굴 인식)</span>
+                </span>
+                <div className={styles.toggleSwitch}>
+                  <input
+                    type="checkbox"
+                    checked={cameraEnabled}
+                    onChange={(e) => setCameraEnabled(e.target.checked)}
+                  />
+                  <span className={styles.toggleSlider} />
+                </div>
+              </label>
+
               <button className={styles.startButton} onClick={handleStart}>
                 <span className={styles.startIcon}>☕</span>
-                <span>시작하기</span>
+                <span>{cameraEnabled ? '카메라 켜고 시작' : '시작하기'}</span>
               </button>
 
               <div className={styles.divider} />

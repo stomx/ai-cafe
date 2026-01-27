@@ -27,8 +27,8 @@ export default function Home() {
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [pendingOrders, setPendingOrders] = useState<{ menuItem: MenuItem; quantity: number }[]>([]);
 
-  // 얼굴 인식 On/Off
-  const [faceDetectionEnabled, setFaceDetectionEnabled] = useState(true);
+  // 얼굴 인식 On/Off (기본값 false, 스플래시 화면에서 설정)
+  const [faceDetectionEnabled, setFaceDetectionEnabled] = useState(false);
 
   const hasAutoStartedRef = useRef(false);
   const speakRef = useRef<(text: string) => void>(() => {});
@@ -166,12 +166,30 @@ export default function Home() {
   speakRef.current = speakWithEchoFilter;
 
   // Callback for when splash screen is dismissed
-  const handleSplashStart = useCallback(() => {
+  const handleSplashStart = useCallback((cameraEnabled: boolean) => {
     // 스플래시에서 시작 시 경고 플래그 초기화
     hasShownMicTimeoutRef.current = false;
     hasShownSessionWarningRef.current = false;
+    hasAutoStartedRef.current = true; // 얼굴 감지 시 중복 인사 방지
+
+    // 카메라(얼굴 인식) 활성화 설정
+    setFaceDetectionEnabled(cameraEnabled);
     setShowSplash(false);
-  }, []);
+
+    // 세션 시작 및 인사 메시지
+    startSession();
+    addGreeting();
+
+    // TTS 재생 (약간의 딜레이 후 - 화면 전환 완료 대기)
+    setTimeout(() => {
+      speakRef.current('안녕하세요! 무엇을 주문하시겠어요?');
+    }, 300);
+
+    // 2초 후 음성 인식 시작
+    setTimeout(() => {
+      startListening();
+    }, 2000);
+  }, [startSession, addGreeting, startListening]);
 
   // Start queue simulation on mount (only after splash is dismissed)
   useEffect(() => {
