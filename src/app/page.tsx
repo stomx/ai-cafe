@@ -164,7 +164,7 @@ export default function Home() {
     }
     // timeout 상태로 설정 (다시 시도 버튼 표시)
     setVoiceState('timeout');
-    const msg = '15초간 음성이 없어서 마이크를 껐어요. 버튼을 눌러 다시 주문해주세요.';
+    const msg = '음성 입력이 없어서 마이크를 껐습니다. 음성으로 주문하기를 누른 후 음성으로 주문하거나 버튼을 눌러 주문해주세요.';
     addAssistantResponse(msg);
     speakRef.current(msg);
     // 음성 타임아웃 시에도 활동으로 간주하지 않음 - 세션 타이머는 계속 진행
