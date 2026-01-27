@@ -326,6 +326,9 @@ export default function Home() {
     // 스플래시 화면이면 무시
     if (showSplash) return;
 
+    // 음성 주문 처리 중이면 무시 (useVoiceOrderProcessor에서 직접 응답함)
+    if (temperatureConflicts.length > 0 || voiceState === 'listening' || voiceState === 'success') return;
+
     // 첫 렌더링이면 무시
     if (prevItems.length === 0 && items.length === 0) return;
 
@@ -403,7 +406,7 @@ export default function Home() {
         debounceTimerRef.current = null;
       }, 600);
     }
-  }, [items, showSplash, addAssistantResponse]);
+  }, [items, showSplash, addAssistantResponse, temperatureConflicts, voiceState]);
 
   const handleSelectMenuItem = useCallback((item: MenuItem) => {
     stopTTSRef.current(); // TTS 중지
