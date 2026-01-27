@@ -28,46 +28,51 @@ const numberToKoreanDigits = (num: number): string => {
   return String(num).split('').map(d => digits[parseInt(d)]).join('');
 };
 
-// 금액을 한글로 변환 (18500 → "만 팔천오백", 4500 → "사천오백")
+// 금액을 한글로 변환 (18500 → "만 팔천 오백")
 const numberToKoreanPrice = (num: number): string => {
   if (num === 0) return '영';
 
-  const units = ['', '만 ', '억 ']; // 띄어쓰기로 TTS 자연스럽게
+  const units = ['', '만', '억'];
   const smallUnits = ['', '십', '백', '천'];
   const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
 
-  let result = '';
+  const parts: string[] = [];
   let unitIndex = 0;
 
   while (num > 0) {
-    const chunk = num % 10000; // 4자리씩 처리
+    const chunk = num % 10000;
     if (chunk > 0) {
-      let chunkStr = '';
+      const chunkParts: string[] = [];
       let tempChunk = chunk;
 
       for (let i = 0; i < 4 && tempChunk > 0; i++) {
         const digit = tempChunk % 10;
         if (digit > 0) {
-          // 1인 경우 십, 백, 천 앞에서는 생략 (단, 일의 자리는 제외)
+          // 1인 경우 십, 백, 천 앞에서는 생략
           const digitStr = (digit === 1 && i > 0) ? '' : digits[digit];
-          chunkStr = digitStr + smallUnits[i] + chunkStr;
+          chunkParts.unshift(digitStr + smallUnits[i]);
         }
         tempChunk = Math.floor(tempChunk / 10);
       }
 
-      // 만, 억 앞의 '일'도 생략 (일만 → 만, 일억 → 억)
-      if (chunkStr === '일' && unitIndex > 0) {
-        chunkStr = '';
+      // 만, 억 단위 추가
+      if (unitIndex > 0) {
+        // 만 앞의 '일' 생략 (일만 → 만)
+        if (chunkParts.length === 1 && chunkParts[0] === '일') {
+          parts.unshift(units[unitIndex]);
+        } else {
+          parts.unshift(chunkParts.join(' ') + ' ' + units[unitIndex]);
+        }
+      } else {
+        parts.unshift(chunkParts.join(' '));
       }
-
-      result = chunkStr + units[unitIndex] + result;
     }
 
     num = Math.floor(num / 10000);
     unitIndex++;
   }
 
-  return result.trim();
+  return parts.join(' ');
 };
 
 export default function Home() {
