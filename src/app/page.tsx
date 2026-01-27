@@ -28,11 +28,11 @@ const numberToKoreanDigits = (num: number): string => {
   return String(num).split('').map(d => digits[parseInt(d)]).join('');
 };
 
-// 금액을 한글로 변환 (20000 → "이만", 4500 → "사천오백")
+// 금액을 한글로 변환 (18500 → "만 팔천오백", 4500 → "사천오백")
 const numberToKoreanPrice = (num: number): string => {
   if (num === 0) return '영';
 
-  const units = ['', '만', '억']; // 만 단위까지만 지원
+  const units = ['', '만 ', '억 ']; // 띄어쓰기로 TTS 자연스럽게
   const smallUnits = ['', '십', '백', '천'];
   const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
 
@@ -55,6 +55,11 @@ const numberToKoreanPrice = (num: number): string => {
         tempChunk = Math.floor(tempChunk / 10);
       }
 
+      // 만, 억 앞의 '일'도 생략 (일만 → 만, 일억 → 억)
+      if (chunkStr === '일' && unitIndex > 0) {
+        chunkStr = '';
+      }
+
       result = chunkStr + units[unitIndex] + result;
     }
 
@@ -62,7 +67,7 @@ const numberToKoreanPrice = (num: number): string => {
     unitIndex++;
   }
 
-  return result;
+  return result.trim();
 };
 
 export default function Home() {
