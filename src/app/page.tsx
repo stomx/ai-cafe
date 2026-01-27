@@ -369,8 +369,8 @@ export default function Home() {
     if (changeType === 'add' || changeType === 'remove') {
       const tempStr = changedItem.temperature ? ` ${changedItem.temperature}` : '';
       const msg = changeType === 'add'
-        ? `${changedItem.name}${tempStr} 추가했어요.`
-        : `${changedItem.name} 삭제했어요.`;
+        ? `${changedItem.name}${tempStr} ${changedItem.quantity}잔 추가했습니다.`
+        : `${changedItem.name} 삭제했습니다.`;
       addAssistantResponse(msg);
       speakRef.current(msg);
       return;
@@ -390,7 +390,7 @@ export default function Home() {
       // 디바운스: 600ms 후 메시지 표시
       debounceTimerRef.current = setTimeout(() => {
         const tempStr = itemSnapshot.temperature ? ` ${itemSnapshot.temperature}` : '';
-        const msg = `${itemSnapshot.name}${tempStr} ${itemSnapshot.quantity}잔으로 변경했어요.`;
+        const msg = `${itemSnapshot.name}${tempStr} ${itemSnapshot.quantity}잔으로 변경했습니다.`;
 
         // 중복 알림 방지
         const msgKey = `${itemSnapshot.id}-${itemSnapshot.quantity}`;
