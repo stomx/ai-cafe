@@ -502,7 +502,7 @@ export class SupertonicTTS implements TTSEngine {
   private audioContext: AudioContext | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
   private gainNode: GainNode | null = null;
-  private _volume: number = 1.5; // 기본 음량 1.5배
+  private _volume: number = 2; // 기본 음량 2배
 
   private basePath: string;
 
@@ -631,7 +631,7 @@ export class SupertonicTTS implements TTSEngine {
     const {
       voice = '/tts/voice_styles/F1.json',
       speed = 1.2,
-      volume = 1.5,
+      volume = 2,
       totalStep = 30,
       silenceDuration = 0.3,
       onProgress,
