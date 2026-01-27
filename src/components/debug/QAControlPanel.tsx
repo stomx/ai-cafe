@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useOrderStore } from '@/store/orderStore';
 import type { OrderIntent } from '@/lib/gemini/types';
+import { validateScenario, type TestValidationResult } from '@/utils/testValidator';
 
 interface TestScenario {
   id: number;
@@ -16,11 +17,13 @@ interface TestScenario {
 interface TestLog {
   timestamp: string;
   scenario: string;
+  scenarioId?: number;
   transcript: string;
   intent: OrderIntent | null;
   success: boolean;
   message: string;
   error?: string;
+  validation?: TestValidationResult;
 }
 
 interface QAControlPanelProps {
@@ -240,6 +243,7 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
 
     addLog({
       scenario: `[${scenario.id}] ${scenario.name}`,
+      scenarioId: scenario.id,
       transcript: scenario.transcript,
       intent: null,
       success: false,
@@ -249,8 +253,26 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
     // 트랜스크립트 제출
     onTranscriptSubmit(scenario.transcript);
 
-    // 결과 대기 (실제로는 onTranscriptSubmit 콜백으로 처리)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // 결과 대기 및 검증
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    // 자동 검증 수행
+    const validation = validateScenario(scenario.id, lastIntent ?? null, orderItems, lastTTSMessage);
+
+    // 로그 업데이트
+    setLogs((prev) => {
+      const updated = [...prev];
+      const lastLog = updated[updated.length - 1];
+      if (lastLog && lastLog.scenarioId === scenario.id) {
+        lastLog.success = validation.passed;
+        lastLog.message = validation.passed
+          ? '✓ 테스트 통과'
+          : `✗ 실패: ${validation.errors.join(', ')}`;
+        lastLog.validation = validation;
+        lastLog.intent = lastIntent ?? null;
+      }
+      return updated;
+    });
 
     setCurrentTestId(null);
   };
@@ -269,6 +291,13 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
 
   const clearLogs = () => {
     setLogs([]);
+  };
+
+  // 테스트 통계 계산
+  const testStats = {
+    total: logs.filter((log) => log.validation).length,
+    passed: logs.filter((log) => log.validation?.passed).length,
+    failed: logs.filter((log) => log.validation && !log.validation.passed).length,
   };
 
   if (!isOpen) {
@@ -370,6 +399,33 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
                   로그 초기화
                 </button>
               </div>
+
+              {/* Test Statistics */}
+              {testStats.total > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-semibold mb-2 text-amber-300">테스트 통계</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">총 테스트:</span>
+                      <span className="text-white font-medium">{testStats.total}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">통과:</span>
+                      <span className="text-green-400 font-medium">{testStats.passed}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">실패:</span>
+                      <span className="text-red-400 font-medium">{testStats.failed}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-gray-700/30">
+                      <span className="text-gray-400">성공률:</span>
+                      <span className={`font-bold ${testStats.passed === testStats.total ? 'text-green-400' : 'text-yellow-400'}`}>
+                        {testStats.total > 0 ? ((testStats.passed / testStats.total) * 100).toFixed(1) : 0}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -414,7 +470,13 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-gray-400">{log.timestamp}</span>
-                      {log.success ? (
+                      {log.validation ? (
+                        log.validation.passed ? (
+                          <span className="text-green-400 font-bold">✓ PASS</span>
+                        ) : (
+                          <span className="text-red-400 font-bold">✗ FAIL</span>
+                        )
+                      ) : log.success ? (
                         <span className="text-green-400">✓</span>
                       ) : (
                         <span className="text-yellow-400">⏳</span>
@@ -428,9 +490,21 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
                         <span className="px-1 py-0.5 bg-amber-900/30 text-amber-300 rounded">
                           {log.intent.type}
                         </span>
+                        {log.intent.confidence !== undefined && (
+                          <span className="ml-2 text-gray-500">
+                            (confidence: {(log.intent.confidence * 100).toFixed(0)}%)
+                          </span>
+                        )}
                       </div>
                     )}
-                    <div className="text-gray-300 mt-1">{log.message}</div>
+                    <div className={`mt-1 ${log.validation?.passed ? 'text-green-300' : log.validation ? 'text-red-300' : 'text-gray-300'}`}>
+                      {log.message}
+                    </div>
+                    {log.validation && log.validation.warnings.length > 0 && (
+                      <div className="text-yellow-400 mt-1 text-xs">
+                        경고: {log.validation.warnings.join(', ')}
+                      </div>
+                    )}
                     {log.error && <div className="text-red-400 mt-1">Error: {log.error}</div>}
                   </div>
                 ))
