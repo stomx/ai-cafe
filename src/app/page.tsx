@@ -87,10 +87,15 @@ export default function Home() {
   const hasAutoStartedRef = useRef(false);
   const speakRef = useRef<(text: string) => void>(() => {});
   const stopTTSRef = useRef<() => void>(() => {});
+  const stopListeningRef = useRef<() => void>(() => {});
   const hasShownMicTimeoutRef = useRef(false);
   const hasShownSessionWarningRef = useRef(false);
   const prevItemsRef = useRef<typeof items>([]);
   const isOrderConfirmingRef = useRef(false); // 주문 확정 중 플래그 (삭제 알림 방지)
+  const ignoreSpeechResultRef = useRef(false); // 터치 입력 시 음성 결과 무시 플래그
+  // 콜백 refs (useVoiceOrderProcessor에서 사용)
+  const handleShowOrderConfirmRef = useRef<() => void>(() => {});
+  const handleConfirmOrderRef = useRef<() => void>(() => {});
 
   const addItem = useOrderStore((state) => state.addItem);
   const items = useOrderStore((state) => state.items);
@@ -138,14 +143,37 @@ export default function Home() {
     voiceState,
     setVoiceState,
     temperatureConflicts,
-    handleSpeechResult,
+    pendingAddedItems,
+    handleSpeechResult: handleSpeechResultOriginal,
     handleVoiceTemperatureSelect,
     interimMessageIdRef,
     resetState: resetVoiceProcessor,
   } = useVoiceOrderProcessor({
     speakRef,
     resetActivity,
+    useGemini: true, // Gemini LLM 사용 여부
+    showOrderConfirmModal, // 모달 상태 전달
+    onShowOrderConfirm: () => {
+      // 음성으로 "주문해줘" → 주문 확인 모달 표시
+      handleShowOrderConfirmRef.current();
+    },
+    onConfirmOrder: () => {
+      // 모달 열린 상태에서 "결제해줘" → 실제 주문 완료
+      handleConfirmOrderRef.current();
+    },
+    onOrderConfirmed: () => {
+      setVoiceState('idle');
+    },
   });
+
+  // 터치 입력 시 음성 결과 무시하는 래퍼
+  const handleSpeechResult = useCallback((text: string, isFinal: boolean) => {
+    if (ignoreSpeechResultRef.current) {
+      console.log('[Page] Ignoring speech result due to touch input:', text);
+      return;
+    }
+    handleSpeechResultOriginal(text, isFinal);
+  }, [handleSpeechResultOriginal]);
 
   // Keep resetVoiceProcessorRef updated for use in handleSessionTimeout
   resetVoiceProcessorRef.current = resetVoiceProcessor;
@@ -175,6 +203,10 @@ export default function Home() {
   }, [addAssistantResponse, setVoiceState, interimMessageIdRef]);
 
   const handleSpeechStart = useCallback(() => {
+    // TTS 재생 중이면 무시 (TTS 출력이 마이크에 잡힌 경우)
+    if (isSpeakingRef.current) {
+      return;
+    }
     // 음성 입력 시작 시 TTS 중지
     stopTTSRef.current();
     // voiceState는 sttState에서 동기화되므로 여기서 설정 불필요
@@ -191,11 +223,14 @@ export default function Home() {
   } = useSpeechToText({
     language: 'ko-KR',
     continuous: true,
-    silenceTimeout: 15000,
+    silenceTimeout: 0, // 비활성화 - 세션 타이머로 관리
     onResult: handleSpeechResult,
     onSilenceTimeout: handleSilenceTimeout,
     onSpeechStart: handleSpeechStart,
   });
+
+  // Keep stopListeningRef updated
+  stopListeningRef.current = stopListening;
 
   // STT 상태 변화에 따라 voiceState 동기화
   // voiceState: UI 힌트용 (idle, listening, timeout, success)
@@ -214,12 +249,16 @@ export default function Home() {
   }, [sttState, setVoiceState]);
 
   // Text-to-Speech with echo filter callbacks (기본 음성 F1)
-  const { speak, stop: stopTTS } = useTextToSpeech({
+  const { speak, stop: stopTTS, isSpeaking } = useTextToSpeech({
     language: 'ko-KR',
     rate: 1.2,
     voice: '/tts/voice_styles/F1.json',
     onEnd: onTTSEnd, // 에코 필터에 TTS 종료 알림
   });
+
+  // TTS 재생 상태를 ref로 관리 (콜백에서 최신 값 접근용)
+  const isSpeakingRef = useRef(isSpeaking);
+  isSpeakingRef.current = isSpeaking;
 
   // 픽업 안내용 TTS (F2 음성)
   const { speak: speakPickup } = useTextToSpeech({
@@ -292,6 +331,26 @@ export default function Home() {
   }, [sttState]);
 
 
+  // 30초 남으면 마이크 자동 Off
+  const MIC_OFF_THRESHOLD = 30; // 세션 잔여 30초
+  useEffect(() => {
+    // 주문 완료 중이면 무시 (조용히 마이크 끄기)
+    if (isOrderConfirmingRef.current) return;
+
+    if (isSessionActive && sessionTimeLeft === MIC_OFF_THRESHOLD && isListening) {
+      console.log(`[Page] Auto mic off at ${sessionTimeLeft}s remaining`);
+      stopListening();
+
+      // 중복 알림 방지
+      if (!hasShownMicTimeoutRef.current) {
+        hasShownMicTimeoutRef.current = true;
+        const msg = '음성 입력 시간이 종료되었습니다. 버튼을 눌러 주문하거나 화면을 터치해주세요.';
+        addAssistantResponse(msg);
+        speakRef.current(msg);
+      }
+    }
+  }, [isSessionActive, sessionTimeLeft, isListening, stopListening, addAssistantResponse]);
+
   // 10초 남으면 세션 종료 임박 경고
   useEffect(() => {
     if (isSessionActive && sessionTimeLeft === SESSION_WARNING && !hasShownSessionWarningRef.current) {
@@ -315,7 +374,7 @@ export default function Home() {
     if (showSplash) return;
 
     // 음성 주문 처리 중이면 무시 (useVoiceOrderProcessor에서 직접 응답함)
-    if (temperatureConflicts.length > 0 || voiceState === 'listening' || voiceState === 'success') return;
+    if (temperatureConflicts.length > 0 || pendingAddedItems.length > 0 || voiceState === 'listening' || voiceState === 'success') return;
 
     // 첫 렌더링이면 무시
     if (prevItems.length === 0 && items.length === 0) return;
@@ -358,9 +417,10 @@ export default function Home() {
 
     // 추가/삭제는 즉시 알림
     if (changeType === 'add' || changeType === 'remove') {
-      const tempStr = changedItem.temperature ? ` ${changedItem.temperature}` : '';
+      // 온도 한글 변환: "따뜻한 아메리카노", "아이스 카페라떼"
+      const tempKo = changedItem.temperature === 'HOT' ? '따뜻한 ' : changedItem.temperature === 'ICE' ? '아이스 ' : '';
       const msg = changeType === 'add'
-        ? `${changedItem.name}${tempStr} ${changedItem.quantity}잔 추가했습니다.`
+        ? `${tempKo}${changedItem.name} ${changedItem.quantity}잔 추가했습니다.`
         : `${changedItem.name} 삭제했습니다.`;
       addAssistantResponse(msg);
       speakRef.current(msg);
@@ -380,8 +440,9 @@ export default function Home() {
 
       // 디바운스: 600ms 후 메시지 표시
       debounceTimerRef.current = setTimeout(() => {
-        const tempStr = itemSnapshot.temperature ? ` ${itemSnapshot.temperature}` : '';
-        const msg = `${itemSnapshot.name}${tempStr} ${itemSnapshot.quantity}잔으로 변경했습니다.`;
+        // 온도 한글 변환: "따뜻한 아메리카노", "아이스 카페라떼"
+        const tempKo = itemSnapshot.temperature === 'HOT' ? '따뜻한 ' : itemSnapshot.temperature === 'ICE' ? '아이스 ' : '';
+        const msg = `${tempKo}${itemSnapshot.name} ${itemSnapshot.quantity}잔으로 변경했습니다.`;
 
         // 중복 알림 방지
         const msgKey = `${itemSnapshot.id}-${itemSnapshot.quantity}`;
@@ -394,11 +455,14 @@ export default function Home() {
         debounceTimerRef.current = null;
       }, 600);
     }
-  }, [items, showSplash, addAssistantResponse, temperatureConflicts, voiceState]);
+  }, [items, showSplash, addAssistantResponse, temperatureConflicts, pendingAddedItems, voiceState]);
 
   const handleSelectMenuItem = useCallback((item: MenuItem) => {
     stopTTSRef.current(); // TTS 중지
     resetActivity(); // 활동 타이머 리셋
+    // 터치 입력 시 음성 결과 무시 (마이크 끄기 전 마지막 결과 방지)
+    ignoreSpeechResultRef.current = true;
+    setTimeout(() => { ignoreSpeechResultRef.current = false; }, 500);
     // 사용자 터치 시 음성 입력 비활성화 (안내 없음)
     if (isListening) {
       stopListening();
@@ -421,6 +485,9 @@ export default function Home() {
   const handleSelectTemperature = useCallback((temp: 'HOT' | 'ICE') => {
     stopTTSRef.current(); // TTS 중지
     resetActivity(); // 활동 타이머 리셋
+    // 터치 입력 시 음성 결과 무시 (마이크 끄기 전 마지막 결과 방지)
+    ignoreSpeechResultRef.current = true;
+    setTimeout(() => { ignoreSpeechResultRef.current = false; }, 500);
     // 사용자 터치 시 음성 입력 비활성화 (안내 없음)
     if (isListening) {
       stopListening();
@@ -470,13 +537,19 @@ export default function Home() {
     }, 100);
   }, [items, resetActivity, addAssistantResponse]);
 
+  // Keep handleShowOrderConfirmRef updated
+  handleShowOrderConfirmRef.current = handleShowOrderConfirm;
+
   // 다이얼로그에서 최종 확인 → 실제 주문 처리
   const handleConfirmOrder = useCallback(() => {
     if (items.length === 0) return;
 
+    // 맨 먼저 플래그 설정 (삭제 알림 및 마이크 타임아웃 메시지 방지)
+    isOrderConfirmingRef.current = true;
+
     stopTTSRef.current(); // TTS 중지
+    stopListeningRef.current(); // 마이크 끄기 (조용히)
     setShowOrderConfirmModal(false);
-    isOrderConfirmingRef.current = true; // 주문 확정 중 플래그 (삭제 알림 방지)
     // 세션 타이머 정지
     stopSession();
 
@@ -493,7 +566,10 @@ export default function Home() {
     setTimeout(() => {
       speakRef.current('주문이 완료되었습니다! 잠시만 기다려주세요.');
     }, 500);
-  }, [items, addToQueue, clearOrder, clearMessages, addAssistantResponse, stopSession, setVoiceState]);
+  }, [items, addToQueue, clearOrder, clearMessages, stopSession, setVoiceState]);
+
+  // Keep handleConfirmOrderRef updated
+  handleConfirmOrderRef.current = handleConfirmOrder;
 
   const handleFaceDetected = useCallback(() => {
     // 아직 자동 시작하지 않은 경우에만

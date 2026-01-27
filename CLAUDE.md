@@ -290,7 +290,81 @@ class SupertonicTTS {
 - 50ms 딜레이: AudioContext 클린업 보장
 - finally 블록: 에러 시에도 플래그 리셋
 
+## Gemini LLM Integration
+
+### 개요
+Gemini LLM을 통한 음성 의도 분석 시스템. 기존 `menuMatcher`의 규칙 기반 처리를 보완.
+
+**설계 원칙: 음성 = 터치 동일 동작**
+- 음성/터치 모두 동일한 CTA 함수 (`useOrderActions`) 호출
+- 동일한 피드백 메시지 + TTS
+
+### 파일 구조
+```
+src/lib/gemini/
+├── types.ts      # Intent 타입 정의
+├── prompts.ts    # 시스템 프롬프트
+├── client.ts     # API 클라이언트
+└── index.ts      # Export
+
+src/app/api/gemini/
+└── route.ts      # 서버 API 라우트 (API 키 보호)
+
+src/hooks/
+├── useOrderActions.ts   # CTA 핸들러 통합
+└── useGeminiOrder.ts    # Intent→CTA 연결
+```
+
+### Intent 타입
+```typescript
+type IntentType =
+  | 'ADD_ITEM'           // 메뉴 추가
+  | 'REMOVE_ITEM'        // 메뉴 제거
+  | 'CHANGE_QUANTITY'    // 수량 변경
+  | 'CHANGE_TEMPERATURE' // 온도 변경
+  | 'CLEAR_ORDER'        // 주문 초기화
+  | 'CONFIRM_ORDER'      // 주문 확정
+  | 'ASK_CLARIFICATION'  // 명확화 필요
+  | 'UNKNOWN';           // 파악 불가
+```
+
+### 데이터 흐름
+```
+[음성] → [STT] → [Gemini API] → [Intent] → [useOrderActions] → [동일 응답]
+                       ↓ 에러/낮은 confidence
+               [폴백: menuMatcher]
+```
+
+### 환경 설정
+```bash
+# .env.local (NEXT_PUBLIC_ 접두사 없음 - 서버 전용)
+GEMINI_API_KEY=your-api-key
+```
+
+### 사용 방법
+```typescript
+// useVoiceOrderProcessor 옵션
+useVoiceOrderProcessor({
+  speakRef,
+  resetActivity,
+  useGemini: true,  // Gemini 사용 (기본값)
+  onOrderConfirmed: () => { ... },
+});
+```
+
+### 폴백 전략
+| 조건 | 폴백 트리거 |
+|------|------------|
+| API 에러 | 네트워크 오류, 5xx |
+| 타임아웃 | 5초 초과 |
+| 낮은 Confidence | 0.5 미만 |
+| 파싱 에러 | JSON 파싱 실패 |
+
+폴백 시 `[Gemini Fallback]` 로그 출력 후 기존 `menuMatcher` 사용.
+
+상세 문서: [docs/GEMINI-INTEGRATION.md](./docs/GEMINI-INTEGRATION.md)
+
 ## Korean Language
 - STT: Whisper supports Korean (CER ~11%)
 - TTS: Supertonic with Korean preprocessing (영어→한글 발음, 고유어 수사)
-- LLM: Qwen supports Korean parsing
+- LLM: Qwen supports Korean parsing / Gemini for intent analysis
