@@ -164,9 +164,14 @@ export default function Home() {
     }
     // timeout 상태로 설정 (다시 시도 버튼 표시)
     setVoiceState('timeout');
-    const msg = '음성 입력이 없어서 마이크를 껐습니다. 음성으로 주문하기를 누른 후 음성으로 주문하거나 버튼을 눌러 주문해주세요.';
-    addAssistantResponse(msg);
-    speakRef.current(msg);
+
+    // 중복 알림 방지
+    if (!hasShownMicTimeoutRef.current) {
+      hasShownMicTimeoutRef.current = true;
+      const msg = '음성 입력이 없어서 마이크를 껐습니다. 음성으로 주문하기를 누른 후 음성으로 주문하거나 버튼을 눌러 주문해주세요.';
+      addAssistantResponse(msg);
+      speakRef.current(msg);
+    }
     // 음성 타임아웃 시에도 활동으로 간주하지 않음 - 세션 타이머는 계속 진행
   }, [addAssistantResponse, setVoiceState, interimMessageIdRef]);
 
@@ -294,10 +299,10 @@ export default function Home() {
       console.log(`[Page] Session time ${sessionTimeLeft}s <= ${VOICE_TIMEOUT}s, stopping voice input`);
       stopListening();
 
-      // 한 번만 알림
+      // 한 번만 알림 (handleSilenceTimeout과 중복 방지)
       if (!hasShownMicTimeoutRef.current) {
         hasShownMicTimeoutRef.current = true;
-        const msg = '장시간 말씀이 없으셔서 마이크를 껐어요. 터치로 이어서 진행해주세요.';
+        const msg = '음성 입력이 없어서 마이크를 껐습니다. 음성으로 주문하기를 누른 후 음성으로 주문하거나 버튼을 눌러 주문해주세요.';
         addAssistantResponse(msg);
         speakRef.current(msg);
       }
