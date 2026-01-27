@@ -16,6 +16,7 @@ import { useOrderStore } from '@/store/orderStore';
 import { useQueueStore } from '@/store/queueStore';
 import { useChatStore } from '@/store/chatStore';
 import { onTTSStart, onTTSEnd, resetEchoFilter } from '@/utils/echoFilter';
+import { playMicOnSound, playMicOffSound } from '@/utils/soundEffects';
 import type { MenuItem } from '@/types/menu';
 
 const VOICE_TIMEOUT = 30; // 음성 입력 종료 시점 (세션 잔여 시간 기준, 초)
@@ -170,7 +171,6 @@ export default function Home() {
     // 스플래시에서 시작 시 경고 플래그 초기화
     hasShownMicTimeoutRef.current = false;
     hasShownSessionWarningRef.current = false;
-    hasAutoStartedRef.current = true; // 얼굴 감지 시 중복 인사 방지
 
     // 카메라(얼굴 인식) 활성화 설정
     setFaceDetectionEnabled(cameraEnabled);
@@ -185,11 +185,11 @@ export default function Home() {
       speakRef.current('안녕하세요! 무엇을 주문하시겠어요?');
     }, 300);
 
-    // 2초 후 음성 인식 시작
-    setTimeout(() => {
-      startListening();
-    }, 2000);
-  }, [startSession, addGreeting, startListening]);
+    // 마이크는 자동 시작하지 않음
+    // 마이크 실행 조건:
+    // 1. 카메라가 켜져있고 얼굴이 감지될 때 (handleFaceDetected)
+    // 2. 사용자가 "음성으로 주문하기" 버튼을 눌렀을 때 (handleStartOrder)
+  }, [startSession, addGreeting]);
 
   // Start queue simulation on mount (only after splash is dismissed)
   useEffect(() => {
@@ -324,6 +324,7 @@ export default function Home() {
 
       // 2초 후 음성 인식 시작
       setTimeout(() => {
+        playMicOnSound(); // 마이크 켜짐 효과음
         startListening();
       }, 2000);
     }
@@ -338,6 +339,7 @@ export default function Home() {
     // 먼저 타이머 리셋 (30초) → 그 다음 음성 입력 시작
     // 순서 중요: startListening 전에 resetActivity를 호출해야 15초 이하 체크에서 안전
     resetActivity();
+    playMicOnSound(); // 마이크 켜짐 효과음
     startListening();
   }, [startListening, resetActivity, interimMessageIdRef]);
 
@@ -348,6 +350,7 @@ export default function Home() {
       removeMessage(interimMessageIdRef.current);
       interimMessageIdRef.current = null;
     }
+    playMicOffSound(); // 마이크 꺼짐 효과음
     stopListening();
   }, [stopListening, interimMessageIdRef]);
 
