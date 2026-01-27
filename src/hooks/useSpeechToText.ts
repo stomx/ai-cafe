@@ -239,11 +239,13 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}): UseSpeech
         console.log('[STT] Result[', i, ']:', text, 'isFinal:', result.isFinal, 'confidence:', confidence);
 
         if (result.isFinal) {
-          if (text.trim() && (confidence === undefined || confidence > 0.3)) {
+          // confidence가 undefined, 0, 또는 0.3 이상이면 허용
+          // 일부 브라우저는 항상 confidence=0을 반환함
+          if (text.trim() && (confidence === undefined || confidence === 0 || confidence > 0.3)) {
             finalTranscript += text;
             console.log('[STT] Final accepted:', text);
           } else {
-            console.log('[STT] Final rejected - empty or low confidence');
+            console.log('[STT] Final rejected - empty or low confidence:', confidence);
           }
         } else {
           currentInterim += text;
