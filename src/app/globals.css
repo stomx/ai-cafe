@@ -1,8 +1,16 @@
+@import "tailwindcss";
 @import '../styles/design-tokens.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind CSS v4: Source paths for class scanning */
+@source "../components/**/*.{js,ts,jsx,tsx}";
+@source "../app/**/*.{js,ts,jsx,tsx}";
+@source "../pages/**/*.{js,ts,jsx,tsx}";
+
+/* Tailwind CSS v4: Theme customization */
+@theme {
+  --color-background: var(--color-bg-primary);
+  --color-foreground: var(--color-text-primary);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MIDNIGHT ROAST - Base Styles

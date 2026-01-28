@@ -18,12 +18,17 @@ AI-powered voice-enabled kiosk system for coffee ordering. All AI features run 1
 | LLM | WebLLM + Qwen2.5-1.5B | ~1GB |
 
 ### TTS Architecture (Supertonic)
-**Primary Engine**: Supertonic TTS (ONNX Runtime Web)
+**Primary Engine**: Supertonic TTS v2 (ONNX Runtime Web)
+- **Model Source**: https://huggingface.co/Supertone/supertonic-2
 - **Models**: 4 ONNX files in `public/tts/onnx/`
   - `duration_predictor.onnx`, `text_encoder.onnx`
   - `vector_estimator.onnx`, `vocoder.onnx`
-- **Voice Styles**: Korean F1-F5, M1-M5 (JSON in `public/tts/voice_styles/`)
-- **Caching**: Cache API로 모델 영속화 (첫 로드 후 캐시됨)
+- **Config**: `tts.json` (v1.6.0), `unicode_indexer.json`
+- **Voice Styles**: F1-F5, M1-M5 (JSON in `public/tts/voice_styles/`)
+- **Sample Rate**: 44100Hz (config), 자동 리샘플링 to system rate
+- **Caching**: Cache API로 모델 영속화 (캐시 버전: `supertonic-tts-v3`)
+
+**⚠️ 주의**: v1 모델(`supertonic`)은 일부 시스템에서 작동하지 않음. 반드시 **v2 모델**(`supertonic-2`) 사용.
 
 **Korean Text Preprocessing**:
 - 영어→한국어 발음 변환 (coffee→커피, latte→라떼)
