@@ -429,6 +429,12 @@ export function useGeminiOrder({
         return fallbackToMenuMatcher(transcript, new Error(`Low confidence: ${intent.confidence}`));
       }
 
+      // CONFIRM_ORDER 안전장치: 메뉴 아이템이 포함되어 있으면 ADD_ITEM으로 재분류
+      if (intent.type === 'CONFIRM_ORDER' && intent.items && intent.items.length > 0) {
+        console.log('[Gemini] CONFIRM_ORDER with items detected, reclassifying to ADD_ITEM:', intent.items);
+        intent.type = 'ADD_ITEM';
+      }
+
       // 의도에 따른 CTA 실행
       return executeIntent(intent);
     } catch (error) {

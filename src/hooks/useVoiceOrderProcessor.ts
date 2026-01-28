@@ -51,19 +51,62 @@ export function isTemperatureResponse(text: string): 'HOT' | 'ICE' | null {
 
 /**
  * 주문 확정 의도 확인
+ * 주의: 메뉴 추가 요청과 혼동되지 않도록 엄격하게 매칭
  */
 export function isOrderConfirmIntent(text: string): boolean {
-  const confirmIntentKeywords = [
+  const lowerText = text.toLowerCase().trim();
+
+  // 1. 명확한 주문 확정 키워드 (부분 매칭)
+  const confirmKeywords = [
     '이대로 주문', '이대로 해', '이걸로 해', '이걸로 주문',
     '주문할게', '주문 할게', '주문해줘', '주문 해줘',
     '결제할게', '결제 할게', '결제해줘', '결제 해줘',
     '계산할게', '계산 할게', '계산해줘', '계산 해줘',
-    '끝이야', '끝 이야', '다 됐어', '다됐어', '다 했어',
-    '그게 다야', '그게 전부야', '더 없어', '더없어',
-    '주문 완료', '주문완료', '확정', '완료',
+    '주문 완료', '주문완료',
   ];
-  const lowerText = text.toLowerCase().trim();
-  return confirmIntentKeywords.some(keyword => lowerText.includes(keyword));
+
+  // 2. 단독으로 사용되는 짧은 키워드 (문장 끝에서만 매칭하거나 단독 사용)
+  const endKeywords = [
+    '끝이야', '끝 이야', '그게 다야', '그게 전부야',
+  ];
+
+  // 3. "다 됐어" 패턴 - "다섯" 등의 숫자와 혼동 방지
+  // "다 됐" 패턴은 앞에 숫자(다섯, 다섯잔 등)가 없을 때만 매칭
+  const donePatterns = [
+    /(?<!다섯|하나|둘|셋|넷|여섯|일곱|여덟|아홉|열)다\s*됐/, // "다 됐어", "다됐어"
+    /(?<!다섯|하나|둘|셋|넷|여섯|일곱|여덟|아홉|열)다\s*했/, // "다 했어"
+  ];
+
+  // 4. "더 없어" 패턴 - 단독 또는 문장 끝에서만
+  const noMorePatterns = [
+    /더\s*없어[요]?$/,
+    /^더\s*없어[요]?/,
+  ];
+
+  // 부분 매칭 키워드 체크
+  if (confirmKeywords.some(keyword => lowerText.includes(keyword))) {
+    console.log('[isOrderConfirmIntent] Matched keyword:', lowerText);
+    return true;
+  }
+
+  // 문장 끝 키워드 체크
+  if (endKeywords.some(keyword => lowerText.endsWith(keyword) || lowerText === keyword)) {
+    console.log('[isOrderConfirmIntent] Matched end keyword:', lowerText);
+    return true;
+  }
+
+  // 정규식 패턴 체크
+  if (donePatterns.some(pattern => pattern.test(lowerText))) {
+    console.log('[isOrderConfirmIntent] Matched done pattern:', lowerText);
+    return true;
+  }
+
+  if (noMorePatterns.some(pattern => pattern.test(lowerText))) {
+    console.log('[isOrderConfirmIntent] Matched no-more pattern:', lowerText);
+    return true;
+  }
+
+  return false;
 }
 
 /**

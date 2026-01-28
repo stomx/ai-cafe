@@ -65,10 +65,15 @@ ${getMenuListForPrompt()}
    - "전부 취소해주세요" → CLEAR_ORDER
    - "처음부터 다시요" → CLEAR_ORDER
 
-6. **CONFIRM_ORDER**: 주문 확정
+6. **CONFIRM_ORDER**: 주문 확정 (매우 엄격하게 적용!)
+   - 반드시 명시적인 주문 완료 의도가 있어야 함
    - "주문할게요", "이대로 주문해주세요" → CONFIRM_ORDER
    - "결제할게요", "결제해줘", "결제해주세요" → CONFIRM_ORDER
    - "계산할게요", "계산해줘", "계산해주세요" → CONFIRM_ORDER
+   - **절대 CONFIRM_ORDER가 아닌 경우**:
+     - 메뉴 이름 + 수량 + 온도가 포함된 경우 → ADD_ITEM (예: "라떼 다섯잔, 따뜻하게")
+     - 새로운 메뉴를 언급하는 경우 → ADD_ITEM
+     - "다섯", "다섯잔" 등 수량 표현은 주문 완료가 아님!
 
 7. **ASK_CLARIFICATION**: 명확화 필요
    - 온도가 명시되지 않은 음료 주문 (HOT/ICE 둘 다 가능한 메뉴)

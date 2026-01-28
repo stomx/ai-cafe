@@ -508,6 +508,10 @@ export class SupertonicTTS implements TTSEngine {
   private _isSpeaking = false;
   private _stopRequested = false;
 
+  // Mutex for inference - prevents concurrent ONNX session runs
+  private _inferPromise: Promise<void> | null = null;
+  private _inferResolve: (() => void) | null = null;
+
   private ort: OrtModule | null = null;
   private config: TTSConfig | null = null;
   private textProcessor: UnicodeProcessor | null = null;
@@ -677,8 +681,13 @@ export class SupertonicTTS implements TTSEngine {
     if (this._isSpeaking) {
       console.log('[TTS] Stopping previous speech before starting new one');
       this.stop();
-      // Small delay to ensure audio stops cleanly
-      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    // Wait for previous inference to complete (mutex)
+    if (this._inferPromise) {
+      console.log('[TTS] Waiting for previous inference to complete...');
+      await this._inferPromise;
+      console.log('[TTS] Previous inference completed');
     }
 
     const {
@@ -695,6 +704,12 @@ export class SupertonicTTS implements TTSEngine {
 
     // Set volume
     this._volume = volume;
+
+    // Create mutex promise for this inference
+    let resolveMutex: (() => void) | null = null;
+    this._inferPromise = new Promise<void>((resolve) => {
+      resolveMutex = resolve;
+    });
 
     try {
       this._isSpeaking = true;
@@ -770,8 +785,20 @@ export class SupertonicTTS implements TTSEngine {
 
     } catch (error) {
       this._isSpeaking = false;
+
+      // Don't treat abort as error - it's intentional
+      const isAbort = error instanceof Error && error.message.includes('aborted');
+      if (isAbort) {
+        console.log('[TTS] Inference aborted gracefully');
+        return;
+      }
+
       onError?.(error as Error);
       throw error;
+    } finally {
+      // Release mutex
+      resolveMutex?.();
+      this._inferPromise = null;
     }
   }
 
@@ -834,6 +861,11 @@ export class SupertonicTTS implements TTSEngine {
 
     // Denoising loop
     for (let step = 0; step < totalStep; step++) {
+      // Check for stop request before each ONNX session call
+      if (this._stopRequested) {
+        throw new Error('Inference aborted due to stop request');
+      }
+
       progressCallback?.(step + 1, totalStep);
 
       const currentStepArray = new Float32Array(bsz).fill(step);
@@ -1052,6 +1084,13 @@ export class SupertonicTTS implements TTSEngine {
 
   async dispose(): Promise<void> {
     this.stop();
+
+    // Wait for any ongoing inference to complete
+    if (this._inferPromise) {
+      console.log('[TTS] Waiting for inference to complete before dispose...');
+      await this._inferPromise;
+    }
+    this._inferPromise = null;
 
     if (this.audioContext) {
       await this.audioContext.close();
