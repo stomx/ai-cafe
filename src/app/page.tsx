@@ -102,6 +102,7 @@ export default function Home() {
   const clearOrder = useOrderStore((state) => state.clearOrder);
   const addToQueue = useQueueStore((state) => state.addToQueue);
   const startSimulation = useQueueStore((state) => state.startSimulation);
+  const readyQueue = useQueueStore((state) => state.readyQueue);
 
   // Chat store
   const addGreeting = useChatStore((state) => state.addGreeting);
@@ -322,6 +323,30 @@ export default function Home() {
       startSimulation();
     }
   }, [showSplash, startSimulation]);
+
+  // 픽업대기(readyQueue)가 비어있는 상태로 10초 경과 시 스플래시로 복귀
+  const EMPTY_QUEUE_TIMEOUT = 10; // 초
+  useEffect(() => {
+    // 스플래시 화면이면 무시
+    if (showSplash) return;
+
+    // 세션이 활성화되어 있으면 무시 (주문 중)
+    if (isSessionActive) return;
+
+    // readyQueue에 항목이 있으면 무시
+    if (readyQueue.length > 0) return;
+
+    console.log('[Page] Ready queue empty, starting 10s timer...');
+
+    const timer = setTimeout(() => {
+      console.log('[Page] Ready queue empty for 10s - returning to splash');
+      handleSessionTimeout();
+    }, EMPTY_QUEUE_TIMEOUT * 1000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [showSplash, isSessionActive, readyQueue.length, handleSessionTimeout]);
 
   // Reset auto-start flag when STT state becomes idle
   useEffect(() => {
