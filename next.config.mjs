@@ -28,6 +28,15 @@ const nextConfig = {
       ];
     },
   }),
+  // Turbopack 설정 (Next.js 16 기본 번들러)
+  turbopack: {
+    resolveAlias: {
+      fs: { browser: './src/lib/empty.js' },
+      path: { browser: './src/lib/empty.js' },
+      module: { browser: './src/lib/empty.js' },
+    },
+  },
+  // Webpack 폴백 (Turbopack 미지원 기능용)
   webpack: (config, { isServer }) => {
     config.experiments = {
       ...config.experiments,

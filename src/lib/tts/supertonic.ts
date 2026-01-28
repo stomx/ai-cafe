@@ -21,8 +21,9 @@ type OrtModule = any;
 // ONNX Runtime CDN URL
 const ORT_CDN_URL = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js';
 
-// Cache name for TTS models
-const TTS_CACHE_NAME = 'supertonic-tts-v1';
+// Cache name for TTS models - increment version to force re-download of models
+// v3: Updated to Supertonic v2 models (from supertonic-2 repo)
+const TTS_CACHE_NAME = 'supertonic-tts-v3';
 
 // TTS ONNX 모델 CDN URL (환경변수로 설정)
 // 로컬: /tts/onnx, 운영: https://assets.stomx.net/tts/onnx
@@ -145,6 +146,27 @@ export async function clearTTSCache(): Promise<boolean> {
   } catch (error) {
     console.error('[TTS Cache] Clear failed:', error);
     return false;
+  }
+}
+
+/**
+ * Clean up old cache versions (e.g., when upgrading from v1 to v2)
+ */
+async function cleanupOldCaches(): Promise<void> {
+  if (typeof caches === 'undefined') return;
+
+  try {
+    const cacheNames = await caches.keys();
+    const oldCaches = cacheNames.filter(name =>
+      name.startsWith('supertonic-tts-') && name !== TTS_CACHE_NAME
+    );
+
+    for (const cacheName of oldCaches) {
+      await caches.delete(cacheName);
+      console.log(`[TTS Cache] Deleted old cache: ${cacheName}`);
+    }
+  } catch (error) {
+    console.warn('[TTS Cache] Old cache cleanup failed:', error);
   }
 }
 
@@ -528,11 +550,8 @@ export class SupertonicTTS implements TTSEngine {
 
   async load(onProgress?: (progress: number, message: string) => void): Promise<void> {
     try {
-      // Check cache status
+      // Check cache status first
       const cacheInfo = await getCacheInfo();
-      if (cacheInfo.cached) {
-        console.log('[TTS] Using cached models');
-      }
 
       // 0. Load ONNX Runtime from CDN (browser only)
       onProgress?.(2, 'ONNX Runtime 로딩...');
@@ -543,6 +562,25 @@ export class SupertonicTTS implements TTSEngine {
       this.config = await fetchJsonWithCache<TTSConfig>(`${this.basePath}/tts.json`);
       this._sampleRate = this.config.ae.sample_rate;
 
+      // Environment diagnostics (after config loaded to show actual sample rate)
+      const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
+      let systemSampleRate: number | string = 'unknown';
+      if (typeof AudioContext !== 'undefined') {
+        const tempCtx = new AudioContext();
+        systemSampleRate = tempCtx.sampleRate;
+        tempCtx.close(); // Clean up temp context
+      }
+
+      console.log('[TTS] ═══════════════════════════════════════');
+      console.log('[TTS] Environment Diagnostics:');
+      console.log('[TTS]   WebGPU supported:', hasWebGPU);
+      console.log('[TTS]   System sample rate:', systemSampleRate);
+      console.log('[TTS]   TTS config sample rate:', this._sampleRate);
+      console.log('[TTS]   Cache version:', TTS_CACHE_NAME);
+      console.log('[TTS]   Using cache:', cacheInfo.cached ? `${cacheInfo.fileCount} files` : 'no');
+      console.log('[TTS]   User Agent:', navigator?.userAgent?.slice(0, 80) || 'unknown');
+      console.log('[TTS] ═══════════════════════════════════════');
+
       // 2. Load unicode indexer (10%) - with cache
       onProgress?.(10, '텍스트 처리기 로딩...');
       const indexer = await fetchJsonWithCache<UnicodeIndexer>(`${this.basePath}/unicode_indexer.json`);
@@ -552,6 +590,7 @@ export class SupertonicTTS implements TTSEngine {
       const sessionOptions = {
         executionProviders: ['webgpu', 'wasm'],
         graphOptimizationLevel: 'all',
+        logSeverityLevel: 3, // 0=Verbose, 1=Info, 2=Warning, 3=Error - suppress node assignment warnings
       };
 
       // 3. Load ONNX models (10-90%) - with cache
@@ -587,12 +626,26 @@ export class SupertonicTTS implements TTSEngine {
         }
       }
 
-      // 4. Initialize AudioContext
-      this.audioContext = new AudioContext({ sampleRate: this._sampleRate });
+      // 4. Initialize AudioContext - use system default sample rate for best compatibility
+      // The browser will automatically resample when we create buffers with the source sample rate
+      this.audioContext = new AudioContext();
+
+      // Log actual execution providers used
+      const usedProviders = this.dpSession?.handler?.['_inferenceSession']?.['_session']?.['_backend']?.['_backend']?.name
+        || 'unknown (check session info)';
+      console.log('[TTS] ═══════════════════════════════════════');
+      console.log('[TTS] Loading complete!');
+      console.log('[TTS]   AudioContext state:', this.audioContext.state);
+      console.log('[TTS]   AudioContext sample rate:', this.audioContext.sampleRate);
+      console.log('[TTS]   Models loaded: duration_predictor, text_encoder, vector_estimator, vocoder');
+      console.log('[TTS] ═══════════════════════════════════════');
 
       this._isLoaded = true;
       this._loadProgress = 100;
       onProgress?.(100, '로딩 완료!');
+
+      // Clean up old cache versions in background
+      cleanupOldCaches();
 
     } catch (error) {
       this._isLoaded = false;
@@ -648,6 +701,9 @@ export class SupertonicTTS implements TTSEngine {
       this._stopRequested = false;
       onStart?.();
 
+      const speechStartTime = performance.now();
+      console.log('[TTS] Starting speech synthesis for:', text.slice(0, 50) + (text.length > 50 ? '...' : ''));
+
       // Load voice style if needed
       if (!this.currentStyle) {
         this.currentStyle = await this.loadVoiceStyle(voice);
@@ -656,6 +712,7 @@ export class SupertonicTTS implements TTSEngine {
       // Chunk text
       const maxLen = lang === 'ko' ? 120 : 300;
       const textList = chunkText(text, maxLen);
+      console.log('[TTS] Text chunks:', textList.length);
 
       let wavCat: number[] = [];
 
@@ -667,6 +724,7 @@ export class SupertonicTTS implements TTSEngine {
           return;
         }
 
+        const chunkStartTime = performance.now();
         const { wav } = await this._infer(
           [textList[i]],
           [lang],
@@ -675,6 +733,10 @@ export class SupertonicTTS implements TTSEngine {
           speed,
           (step) => onProgress?.(step + i * totalStep, textList.length * totalStep)
         );
+
+        const chunkDuration = performance.now() - chunkStartTime;
+        const audioDuration = wav.length / this._sampleRate;
+        console.log(`[TTS] Chunk ${i + 1}/${textList.length}: inference=${chunkDuration.toFixed(0)}ms, audio=${audioDuration.toFixed(2)}s, ratio=${(chunkDuration / 1000 / audioDuration).toFixed(2)}x`);
 
         if (wavCat.length === 0) {
           wavCat = wav;
@@ -691,6 +753,15 @@ export class SupertonicTTS implements TTSEngine {
         this._isSpeaking = false;
         return;
       }
+
+      // Performance summary
+      const totalInferenceTime = performance.now() - speechStartTime;
+      const totalAudioDuration = wavCat.length / this._sampleRate;
+      console.log('[TTS] ═══════════════════════════════════════');
+      console.log(`[TTS] Total inference: ${totalInferenceTime.toFixed(0)}ms`);
+      console.log(`[TTS] Total audio: ${totalAudioDuration.toFixed(2)}s`);
+      console.log(`[TTS] Real-time ratio: ${(totalInferenceTime / 1000 / totalAudioDuration).toFixed(2)}x (< 1.0 is good)`);
+      console.log('[TTS] ═══════════════════════════════════════');
 
       // Play audio
       await this.playAudio(wavCat);
@@ -878,13 +949,33 @@ export class SupertonicTTS implements TTSEngine {
 
   private async playAudio(audioData: number[]): Promise<void> {
     if (!this.audioContext) {
-      this.audioContext = new AudioContext({ sampleRate: this._sampleRate });
+      // Use system default sample rate - we'll resample audio to match
+      this.audioContext = new AudioContext();
     }
 
     // Resume if suspended
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
     }
+
+    // Audio diagnostics
+    const minVal = Math.min(...audioData.slice(0, 1000)); // Check first 1000 samples
+    const maxVal = Math.max(...audioData.slice(0, 1000));
+    const avgVal = audioData.slice(0, 1000).reduce((a, b) => a + b, 0) / Math.min(1000, audioData.length);
+
+    const targetSampleRate = this.audioContext.sampleRate;
+    const needsResampling = this._sampleRate !== targetSampleRate;
+
+    console.log('[TTS] ═══════════════════════════════════════');
+    console.log('[TTS] Audio Playback Diagnostics:');
+    console.log(`[TTS]   Audio samples: ${audioData.length}`);
+    console.log(`[TTS]   Duration: ${(audioData.length / this._sampleRate).toFixed(2)}s`);
+    console.log(`[TTS]   Sample range: [${minVal.toFixed(4)}, ${maxVal.toFixed(4)}]`);
+    console.log(`[TTS]   Average: ${avgVal.toFixed(6)}`);
+    console.log(`[TTS]   Source rate: ${this._sampleRate}Hz`);
+    console.log(`[TTS]   Target rate: ${targetSampleRate}Hz`);
+    console.log(`[TTS]   Manual resampling: ${needsResampling ? 'yes' : 'no'}`);
+    console.log('[TTS] ═══════════════════════════════════════');
 
     // Create or update GainNode for volume control
     if (!this.gainNode) {
@@ -893,11 +984,18 @@ export class SupertonicTTS implements TTSEngine {
     }
     this.gainNode.gain.value = this._volume;
 
-    // Create audio buffer
-    const audioBuffer = this.audioContext.createBuffer(1, audioData.length, this._sampleRate);
+    // Resample audio if needed (manual linear interpolation for consistency across browsers)
+    let finalAudioData = audioData;
+    if (needsResampling) {
+      finalAudioData = this.resampleAudio(audioData, this._sampleRate, targetSampleRate);
+      console.log(`[TTS] Resampled: ${audioData.length} → ${finalAudioData.length} samples`);
+    }
+
+    // Create audio buffer at the target sample rate
+    const audioBuffer = this.audioContext.createBuffer(1, finalAudioData.length, targetSampleRate);
     const channelData = audioBuffer.getChannelData(0);
-    for (let i = 0; i < audioData.length; i++) {
-      channelData[i] = audioData[i];
+    for (let i = 0; i < finalAudioData.length; i++) {
+      channelData[i] = finalAudioData[i];
     }
 
     // Play through GainNode
@@ -911,6 +1009,31 @@ export class SupertonicTTS implements TTSEngine {
       };
       this.currentSource.start();
     });
+  }
+
+  /**
+   * Resample audio using linear interpolation
+   * This provides consistent results across all browsers
+   */
+  private resampleAudio(input: number[], sourceSampleRate: number, targetSampleRate: number): number[] {
+    const ratio = sourceSampleRate / targetSampleRate;
+    const outputLength = Math.ceil(input.length / ratio);
+    const output = new Array(outputLength);
+
+    for (let i = 0; i < outputLength; i++) {
+      const srcPos = i * ratio;
+      const srcIndex = Math.floor(srcPos);
+      const frac = srcPos - srcIndex;
+
+      // Linear interpolation between samples
+      if (srcIndex + 1 < input.length) {
+        output[i] = input[srcIndex] * (1 - frac) + input[srcIndex + 1] * frac;
+      } else {
+        output[i] = input[srcIndex] || 0;
+      }
+    }
+
+    return output;
   }
 
   stop(): void {
@@ -959,3 +1082,47 @@ export class SupertonicTTS implements TTSEngine {
 
 // Export WAV writer for potential use
 export { writeWavFile };
+
+/**
+ * Debug function to download generated audio as WAV file
+ * Call this from browser console: window.debugDownloadTTSAudio("테스트 문장")
+ */
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).debugDownloadTTSAudio = async (text: string = "안녕하세요") => {
+    console.log('[TTS Debug] Generating audio for:', text);
+
+    const tts = new SupertonicTTS();
+    await tts.load((progress, msg) => console.log(`[TTS Debug] ${msg} (${progress}%)`));
+
+    // Access private method via any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ttsAny = tts as any;
+
+    // Load voice style
+    const style = await tts.loadVoiceStyle('/tts/voice_styles/F1.json');
+
+    // Run inference
+    const { wav } = await ttsAny._infer([text], ['ko'], style, 30, 1.2);
+
+    console.log('[TTS Debug] Generated audio:', wav.length, 'samples');
+    console.log('[TTS Debug] Sample rate:', ttsAny._sampleRate);
+    console.log('[TTS Debug] Duration:', (wav.length / ttsAny._sampleRate).toFixed(2), 's');
+    console.log('[TTS Debug] Sample range:', Math.min(...wav).toFixed(4), 'to', Math.max(...wav).toFixed(4));
+
+    // Create WAV file
+    const wavBuffer = writeWavFile(wav, ttsAny._sampleRate);
+    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+
+    // Download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tts-debug-${Date.now()}.wav`;
+    a.click();
+
+    console.log('[TTS Debug] WAV file downloaded. Play it in an external player to check quality.');
+
+    await tts.dispose();
+  };
+}
