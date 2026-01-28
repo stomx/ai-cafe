@@ -148,6 +148,7 @@ export default function Home() {
     stopSession,
     resetActivity,
     SESSION_TIMEOUT,
+    debugFastForward,
   } = useSessionTimer(handleSessionTimeout);
 
   // Voice order processor hook
@@ -843,6 +844,24 @@ export default function Home() {
           onTranscriptSubmit={simulateVoiceInput}
           lastIntent={lastIntent}
           lastTTSMessage={lastTTSMessage}
+          sessionTimer={{
+            isActive: isSessionActive,
+            timeLeft: sessionTimeLeft,
+            startSession,
+            stopSession,
+            resetActivity,
+            debugFastForward,
+          }}
+          onFaceDetected={handleFaceDetected}
+          onTouchSimulate={() => {
+            if (isSessionActive) {
+              stopTTSRef.current();
+              resetActivity();
+              hasShownMicTimeoutRef.current = false;
+              hasShownSessionWarningRef.current = false;
+            }
+          }}
+          isMicActive={isListening && sessionTimeLeft > 30}
         />
       )}
     </>

@@ -148,6 +148,28 @@ export function useSessionTimer(onTimeout: () => void) {
   // Check if session is active
   const isSessionActive = useCallback(() => isActiveRef.current, []);
 
+  // Debug: Fast forward time (for testing only)
+  const debugFastForward = useCallback((seconds: number) => {
+    if (!isActiveRef.current) return;
+
+    // Simulate time passage by adjusting lastActivity
+    const currentElapsed = Math.floor((Date.now() - lastActivityRef.current) / 1000);
+    const newElapsed = currentElapsed + seconds;
+
+    // Set lastActivity to make it seem like more time has passed
+    lastActivityRef.current = Date.now() - (newElapsed * 1000);
+
+    // Manually trigger tick to update state
+    tick();
+  }, [tick]);
+
+  // Debug: Get current session state (for testing)
+  const debugGetState = useCallback(() => ({
+    isActive: isActiveRef.current,
+    timeLeft: timeLeftRef.current,
+    lastActivity: lastActivityRef.current,
+  }), []);
+
   return {
     isActive: state.isActive,
     timeLeft: state.timeLeft,
@@ -157,5 +179,8 @@ export function useSessionTimer(onTimeout: () => void) {
     resetSession,
     isSessionActive,
     SESSION_TIMEOUT,
+    // Debug APIs (for testing)
+    debugFastForward,
+    debugGetState,
   };
 }

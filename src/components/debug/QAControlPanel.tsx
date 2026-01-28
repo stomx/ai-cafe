@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useOrderStore } from '@/store/orderStore';
 import type { OrderIntent } from '@/lib/gemini/types';
 import { validateScenario, type TestValidationResult } from '@/utils/testValidator';
 
+// 테스트 시나리오 타입
 interface TestScenario {
   id: number;
   name: string;
@@ -12,6 +13,24 @@ interface TestScenario {
   expectedIntent: string;
   expectedResult: string;
   initialOrder?: Array<{ menuId: string; temperature: 'HOT' | 'ICE' | null; quantity: number }>;
+}
+
+// 시스템 레벨 E2E 시나리오 타입
+type SystemTestStep =
+  | { type: 'face_detection' }
+  | { type: 'text'; value: string }
+  | { type: 'touch' }
+  | { type: 'fast_forward'; seconds: number }
+  | { type: 'wait'; ms: number }
+  | { type: 'verify'; check: string };
+
+interface SystemTestScenario {
+  id: string;
+  name: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  description: string;
+  steps: SystemTestStep[];
+  verifications: string[];
 }
 
 interface TestLog {
@@ -30,9 +49,115 @@ interface QAControlPanelProps {
   onTranscriptSubmit: (transcript: string) => void;
   lastIntent?: OrderIntent | null;
   lastTTSMessage?: string;
+  // 시스템 레벨 테스트용 props
+  sessionTimer?: {
+    isActive: boolean;
+    timeLeft: number;
+    startSession: () => void;
+    stopSession: () => void;
+    resetActivity: () => void;
+    debugFastForward?: (seconds: number) => void;
+  };
+  onFaceDetected?: () => void;
+  onTouchSimulate?: () => void;
+  isMicActive?: boolean;
 }
 
-// E2E 테스트 시나리오 정의
+// 시스템 레벨 E2E 시나리오 정의
+const SYSTEM_TEST_SCENARIOS: SystemTestScenario[] = [
+  {
+    id: 'TC-001',
+    name: '기본 주문 플로우 (Happy Path)',
+    difficulty: 'easy',
+    description: '전체 주문 플로우가 정상 작동하는지 확인',
+    steps: [
+      { type: 'face_detection' },
+      { type: 'wait', ms: 1000 },
+      { type: 'text', value: '아이스 아메리카노 한 잔 주세요' },
+      { type: 'wait', ms: 2000 },
+      { type: 'text', value: '결제해줘' },
+      { type: 'wait', ms: 2000 },
+    ],
+    verifications: ['세션 시작됨', '메뉴 추가됨', '주문 확정됨'],
+  },
+  {
+    id: 'TC-002',
+    name: '누락 정보 보완 (Multi-turn)',
+    difficulty: 'medium',
+    description: '온도 누락 시 명확화 질문 확인',
+    steps: [
+      { type: 'face_detection' },
+      { type: 'wait', ms: 1000 },
+      { type: 'text', value: '카페라떼 주세요' },
+      { type: 'wait', ms: 2000 },
+      { type: 'text', value: '따뜻한 거' },
+      { type: 'wait', ms: 2000 },
+    ],
+    verifications: ['온도 질문 발생', '주문 완성됨'],
+  },
+  {
+    id: 'TC-003',
+    name: '복합 주문 (Multiple Items)',
+    difficulty: 'hard',
+    description: '한 문장에 여러 메뉴 분리 인식',
+    steps: [
+      { type: 'face_detection' },
+      { type: 'wait', ms: 1000 },
+      { type: 'text', value: '따뜻한 아메리카노 두 잔이랑 아이스 모카 한 잔 줘' },
+      { type: 'wait', ms: 2000 },
+    ],
+    verifications: ['2개 이상 메뉴 추가됨'],
+  },
+  {
+    id: 'TC-006',
+    name: '주문 취소 및 초기화',
+    difficulty: 'easy',
+    description: '명시적 취소 요청 처리',
+    steps: [
+      { type: 'face_detection' },
+      { type: 'wait', ms: 1000 },
+      { type: 'text', value: '아이스 아메리카노 한 잔' },
+      { type: 'wait', ms: 2000 },
+      { type: 'text', value: '주문 다 취소할래' },
+      { type: 'wait', ms: 2000 },
+    ],
+    verifications: ['장바구니 비워짐'],
+  },
+  {
+    id: 'TC-007',
+    name: '세션 타임아웃 (Auto Reset)',
+    difficulty: 'easy',
+    description: '자동 세션 종료 확인',
+    steps: [
+      { type: 'face_detection' },
+      { type: 'wait', ms: 500 },
+      { type: 'fast_forward', seconds: 15 },
+      { type: 'verify', check: 'mic_disabled' },
+      { type: 'wait', ms: 500 },
+      { type: 'fast_forward', seconds: 30 },
+      { type: 'verify', check: 'session_ended' },
+    ],
+    verifications: ['15초: 마이크 비활성화', '45초: 세션 종료'],
+  },
+  {
+    id: 'TC-008',
+    name: '화면 터치로 세션 연장',
+    difficulty: 'medium',
+    description: '마이크 비활성화 후 터치로 재활성화',
+    steps: [
+      { type: 'face_detection' },
+      { type: 'wait', ms: 500 },
+      { type: 'fast_forward', seconds: 20 },
+      { type: 'verify', check: 'mic_disabled' },
+      { type: 'touch' },
+      { type: 'wait', ms: 500 },
+      { type: 'verify', check: 'timer_reset' },
+    ],
+    verifications: ['터치 시 타이머 리셋', '마이크 재활성화'],
+  },
+];
+
+// 음성 처리 테스트 시나리오 정의
 const TEST_SCENARIOS: TestScenario[] = [
   {
     id: 1,
@@ -193,12 +318,22 @@ const TEST_SCENARIOS: TestScenario[] = [
   },
 ];
 
-export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTSMessage }: QAControlPanelProps) {
+export default function QAControlPanel({
+  onTranscriptSubmit,
+  lastIntent,
+  lastTTSMessage,
+  sessionTimer,
+  onFaceDetected,
+  onTouchSimulate,
+  isMicActive,
+}: QAControlPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [logs, setLogs] = useState<TestLog[]>([]);
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [currentTestId, setCurrentTestId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'voice' | 'system'>('voice');
+  const [currentSystemTestId, setCurrentSystemTestId] = useState<string | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const orderItems = useOrderStore((state) => state.items);
 
@@ -207,7 +342,7 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const addLog = (log: Omit<TestLog, 'timestamp'>) => {
+  const addLog = useCallback((log: Omit<TestLog, 'timestamp'>) => {
     setLogs((prev) => [
       ...prev,
       {
@@ -215,7 +350,7 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
         timestamp: new Date().toLocaleTimeString('ko-KR'),
       },
     ]);
-  };
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -293,6 +428,166 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
     setLogs([]);
   };
 
+  // 시스템 테스트 시나리오 실행
+  const runSystemScenario = useCallback(async (scenario: SystemTestScenario) => {
+    setCurrentSystemTestId(scenario.id);
+    const startTime = Date.now();
+
+    addLog({
+      scenario: `[System] ${scenario.id}: ${scenario.name}`,
+      transcript: scenario.description,
+      intent: null,
+      success: false,
+      message: '🚀 시작...',
+    });
+
+    let stepIndex = 0;
+    const errors: string[] = [];
+
+    for (const step of scenario.steps) {
+      stepIndex++;
+      const stepLabel = `Step ${stepIndex}/${scenario.steps.length}`;
+
+      try {
+        switch (step.type) {
+          case 'face_detection':
+            if (onFaceDetected) {
+              onFaceDetected();
+              addLog({
+                scenario: `${scenario.id} - ${stepLabel}`,
+                transcript: '얼굴 감지 시뮬레이션',
+                intent: null,
+                success: true,
+                message: '👤 얼굴 감지됨',
+              });
+            } else {
+              errors.push('onFaceDetected 핸들러 없음');
+            }
+            break;
+
+          case 'text':
+            onTranscriptSubmit(step.value);
+            addLog({
+              scenario: `${scenario.id} - ${stepLabel}`,
+              transcript: step.value,
+              intent: null,
+              success: true,
+              message: '💬 텍스트 입력됨',
+            });
+            break;
+
+          case 'touch':
+            if (onTouchSimulate) {
+              onTouchSimulate();
+              addLog({
+                scenario: `${scenario.id} - ${stepLabel}`,
+                transcript: '화면 터치 시뮬레이션',
+                intent: null,
+                success: true,
+                message: '👆 터치됨',
+              });
+            } else if (sessionTimer?.resetActivity) {
+              sessionTimer.resetActivity();
+              addLog({
+                scenario: `${scenario.id} - ${stepLabel}`,
+                transcript: '세션 리셋 (터치 대체)',
+                intent: null,
+                success: true,
+                message: '👆 세션 리셋됨',
+              });
+            }
+            break;
+
+          case 'fast_forward':
+            if (sessionTimer?.debugFastForward) {
+              sessionTimer.debugFastForward(step.seconds);
+              addLog({
+                scenario: `${scenario.id} - ${stepLabel}`,
+                transcript: `${step.seconds}초 빨리감기`,
+                intent: null,
+                success: true,
+                message: `⏩ ${step.seconds}초 경과 (남은 시간: ${sessionTimer.timeLeft - step.seconds}초)`,
+              });
+            } else {
+              errors.push('debugFastForward 지원 안 됨');
+            }
+            break;
+
+          case 'wait':
+            await new Promise((resolve) => setTimeout(resolve, step.ms));
+            break;
+
+          case 'verify':
+            let verifyResult = false;
+            let verifyMessage = '';
+
+            switch (step.check) {
+              case 'mic_disabled':
+                verifyResult = isMicActive === false || (sessionTimer?.timeLeft ?? 45) <= 30;
+                verifyMessage = verifyResult ? '✓ 마이크 비활성화 확인' : '✗ 마이크가 아직 활성화 상태';
+                break;
+              case 'session_ended':
+                verifyResult = sessionTimer?.isActive === false;
+                verifyMessage = verifyResult ? '✓ 세션 종료 확인' : '✗ 세션이 아직 활성화 상태';
+                break;
+              case 'timer_reset':
+                verifyResult = (sessionTimer?.timeLeft ?? 0) >= 40;
+                verifyMessage = verifyResult ? '✓ 타이머 리셋 확인' : '✗ 타이머가 리셋되지 않음';
+                break;
+            }
+
+            if (!verifyResult) {
+              errors.push(verifyMessage);
+            }
+
+            addLog({
+              scenario: `${scenario.id} - ${stepLabel}`,
+              transcript: `검증: ${step.check}`,
+              intent: null,
+              success: verifyResult,
+              message: verifyMessage,
+            });
+            break;
+        }
+      } catch (error) {
+        errors.push(`Step ${stepIndex} 에러: ${error}`);
+      }
+    }
+
+    // 최종 결과
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const passed = errors.length === 0;
+
+    setLogs((prev) => {
+      const updated = [...prev];
+      // 첫 번째 로그 업데이트
+      const firstLog = updated.find((log) => log.scenario === `[System] ${scenario.id}: ${scenario.name}`);
+      if (firstLog) {
+        firstLog.success = passed;
+        firstLog.message = passed
+          ? `✅ 완료 (${elapsed}s)`
+          : `❌ 실패: ${errors.join(', ')}`;
+      }
+      return updated;
+    });
+
+    setCurrentSystemTestId(null);
+    return { passed, errors };
+  }, [onFaceDetected, onTranscriptSubmit, onTouchSimulate, sessionTimer, isMicActive, addLog]);
+
+  // 모든 시스템 테스트 실행
+  const runAllSystemTests = async () => {
+    setIsRunningTests(true);
+    setLogs([]);
+
+    for (const scenario of SYSTEM_TEST_SCENARIOS) {
+      await runSystemScenario(scenario);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    setIsRunningTests(false);
+  };
+
   // 테스트 통계 계산
   const testStats = {
     total: logs.filter((log) => log.validation).length,
@@ -321,13 +616,45 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
             <h2 className="text-2xl font-bold bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent">
               QA Control Panel
             </h2>
+            {/* 탭 전환 */}
+            <div className="flex gap-1 ml-4 bg-gray-800 rounded-lg p-1">
+              <button
+                onClick={() => setActiveTab('voice')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  activeTab === 'voice'
+                    ? 'bg-amber-600 text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                음성 ({TEST_SCENARIOS.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('system')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  activeTab === 'system'
+                    ? 'bg-amber-600 text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                시스템 ({SYSTEM_TEST_SCENARIOS.length})
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-          >
-            닫기
-          </button>
+          <div className="flex items-center gap-4">
+            {/* 세션 상태 표시 */}
+            {sessionTimer && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className={`w-2 h-2 rounded-full ${sessionTimer.isActive ? 'bg-green-500' : 'bg-gray-500'}`} />
+                <span className="text-gray-400">세션: {sessionTimer.isActive ? `${sessionTimer.timeLeft}초` : '비활성'}</span>
+              </div>
+            )}
+            <button
+              onClick={() => setIsOpen(false)}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+            >
+              닫기
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 p-6 max-h-[calc(90vh-80px)] overflow-hidden">
@@ -385,13 +712,23 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
             <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
               <h3 className="text-lg font-semibold mb-3 text-amber-400">테스트 제어</h3>
               <div className="space-y-2">
-                <button
-                  onClick={runAllTests}
-                  disabled={isRunningTests}
-                  className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
-                >
-                  {isRunningTests ? '테스트 실행 중...' : '전체 테스트 실행'}
-                </button>
+                {activeTab === 'voice' ? (
+                  <button
+                    onClick={runAllTests}
+                    disabled={isRunningTests}
+                    className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+                  >
+                    {isRunningTests ? '테스트 실행 중...' : '음성 테스트 전체 실행'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={runAllSystemTests}
+                    disabled={isRunningTests}
+                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+                  >
+                    {isRunningTests ? '테스트 실행 중...' : '시스템 테스트 전체 실행'}
+                  </button>
+                )}
                 <button
                   onClick={clearLogs}
                   className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
@@ -431,27 +768,102 @@ export default function QAControlPanel({ onTranscriptSubmit, lastIntent, lastTTS
 
           {/* Middle Column: Scenarios */}
           <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50 overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-3 text-amber-400 sticky top-0 bg-gray-800/90 py-2">
-              테스트 시나리오 ({TEST_SCENARIOS.length})
-            </h3>
-            <div className="space-y-2">
-              {TEST_SCENARIOS.map((scenario) => (
-                <button
-                  key={scenario.id}
-                  onClick={() => runScenario(scenario)}
-                  disabled={isRunningTests}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition-all border ${
-                    currentTestId === scenario.id
-                      ? 'bg-amber-900/50 border-amber-500'
-                      : 'bg-gray-900/50 border-gray-700/50 hover:bg-gray-900 hover:border-gray-600'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  <div className="text-xs text-gray-400">#{scenario.id}</div>
-                  <div className="text-sm font-medium text-white">{scenario.name}</div>
-                  <div className="text-xs text-gray-500 mt-1 truncate">{scenario.transcript}</div>
-                </button>
-              ))}
-            </div>
+            {activeTab === 'voice' ? (
+              <>
+                <h3 className="text-lg font-semibold mb-3 text-amber-400 sticky top-0 bg-gray-800/90 py-2">
+                  음성 처리 시나리오 ({TEST_SCENARIOS.length})
+                </h3>
+                <div className="space-y-2">
+                  {TEST_SCENARIOS.map((scenario) => (
+                    <button
+                      key={scenario.id}
+                      onClick={() => runScenario(scenario)}
+                      disabled={isRunningTests}
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-all border ${
+                        currentTestId === scenario.id
+                          ? 'bg-amber-900/50 border-amber-500'
+                          : 'bg-gray-900/50 border-gray-700/50 hover:bg-gray-900 hover:border-gray-600'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <div className="text-xs text-gray-400">#{scenario.id}</div>
+                      <div className="text-sm font-medium text-white">{scenario.name}</div>
+                      <div className="text-xs text-gray-500 mt-1 truncate">{scenario.transcript}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold mb-3 text-blue-400 sticky top-0 bg-gray-800/90 py-2">
+                  시스템 E2E 시나리오 ({SYSTEM_TEST_SCENARIOS.length})
+                </h3>
+                <div className="space-y-2">
+                  {SYSTEM_TEST_SCENARIOS.map((scenario) => (
+                    <button
+                      key={scenario.id}
+                      onClick={() => runSystemScenario(scenario)}
+                      disabled={isRunningTests}
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-all border ${
+                        currentSystemTestId === scenario.id
+                          ? 'bg-blue-900/50 border-blue-500'
+                          : 'bg-gray-900/50 border-gray-700/50 hover:bg-gray-900 hover:border-gray-600'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">{scenario.id}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          scenario.difficulty === 'easy' ? 'bg-green-900/50 text-green-400' :
+                          scenario.difficulty === 'medium' ? 'bg-yellow-900/50 text-yellow-400' :
+                          'bg-red-900/50 text-red-400'
+                        }`}>
+                          {scenario.difficulty === 'easy' ? '쉬움' : scenario.difficulty === 'medium' ? '중간' : '어려움'}
+                        </span>
+                      </div>
+                      <div className="text-sm font-medium text-white mt-1">{scenario.name}</div>
+                      <div className="text-xs text-gray-500 mt-1">{scenario.description}</div>
+                      <div className="text-xs text-blue-400/70 mt-1">
+                        {scenario.steps.length} steps • {scenario.verifications.length} 검증
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* 시스템 제어 버튼들 */}
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-semibold mb-2 text-blue-300">수동 제어</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={onFaceDetected}
+                      disabled={!onFaceDetected}
+                      className="px-2 py-1.5 text-xs bg-purple-800/50 hover:bg-purple-700/50 disabled:bg-gray-800 disabled:text-gray-600 rounded transition-colors"
+                    >
+                      👤 얼굴 감지
+                    </button>
+                    <button
+                      onClick={() => sessionTimer?.resetActivity?.()}
+                      disabled={!sessionTimer?.resetActivity}
+                      className="px-2 py-1.5 text-xs bg-cyan-800/50 hover:bg-cyan-700/50 disabled:bg-gray-800 disabled:text-gray-600 rounded transition-colors"
+                    >
+                      👆 터치 시뮬레이션
+                    </button>
+                    <button
+                      onClick={() => sessionTimer?.debugFastForward?.(10)}
+                      disabled={!sessionTimer?.debugFastForward}
+                      className="px-2 py-1.5 text-xs bg-orange-800/50 hover:bg-orange-700/50 disabled:bg-gray-800 disabled:text-gray-600 rounded transition-colors"
+                    >
+                      ⏩ +10초
+                    </button>
+                    <button
+                      onClick={() => sessionTimer?.stopSession?.()}
+                      disabled={!sessionTimer?.stopSession}
+                      className="px-2 py-1.5 text-xs bg-red-800/50 hover:bg-red-700/50 disabled:bg-gray-800 disabled:text-gray-600 rounded transition-colors"
+                    >
+                      ⏹️ 세션 종료
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Right Column: Logs */}
