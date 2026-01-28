@@ -706,9 +706,8 @@ export class SupertonicTTS implements TTSEngine {
     this._volume = volume;
 
     // Create mutex promise for this inference
-    let resolveMutex: (() => void) | null = null;
     this._inferPromise = new Promise<void>((resolve) => {
-      resolveMutex = resolve;
+      this._inferResolve = resolve;
     });
 
     try {
@@ -797,7 +796,10 @@ export class SupertonicTTS implements TTSEngine {
       throw error;
     } finally {
       // Release mutex
-      resolveMutex?.();
+      if (this._inferResolve) {
+        this._inferResolve();
+        this._inferResolve = null;
+      }
       this._inferPromise = null;
     }
   }

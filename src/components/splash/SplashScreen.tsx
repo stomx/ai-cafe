@@ -173,7 +173,13 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
   }, [loadSupertonic, skipLoading, isOrientationReady, isMobile]);
 
   const isLoading = phase === 'loading';
+  const isTransitioning = phase === 'transitioning';
   const isReady = phase === 'ready';
+
+  // 로딩뷰: loading 단계에서만 표시
+  // 준비뷰: transitioning 또는 ready 단계에서 표시 (전환 중에도 콘텐츠 유지)
+  const showLoadingView = isLoading;
+  const showReadyView = isTransitioning || isReady;
 
   // Brand component (shared between loading and ready states)
   const BrandSection = (
@@ -216,49 +222,92 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
   // 모바일에서는 전체 화면 사용 (FHD 스케일링 없음)
   if (isMobile) {
     return (
-      <div className={`${styles.container} ${styles.mobileContainer}`}>
-        {/* Subtle grain texture */}
-        <div className={styles.grain} />
-
-        {/* Ambient glow */}
-        <div className={`${styles.ambientGlow} ${isReady ? styles.glowReady : ''}`} />
+      <div className="kiosk-viewport">
+        {/* Background Video - 전체화면, 가운데 정렬 */}
+        <video
+          className={styles.videoBackground}
+          autoPlay
+          loop
+          muted
+          playsInline
+          poster="/videos/coffee-brew-poster.jpg"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            objectFit: 'cover',
+            objectPosition: 'center',
+            zIndex: 0,
+            filter: 'brightness(0.5)',
+          }}
+        >
+          <source src="/videos/coffee-brew-loop.mp4" type="video/mp4" />
+        </video>
+        {/* Dark Overlay - 전체화면 */}
+        <div 
+          className={styles.videoOverlay}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.25)',
+            zIndex: 1,
+          }}
+        />
 
         {/* Loading View */}
         <div className={`${styles.loadingView} ${!isLoading ? styles.loadingHidden : ''}`}>
-          <div className={styles.loadingBrand}>
-            {BrandSection}
-          </div>
-
-          <div className={styles.loader}>
-            <div className={styles.progressContainer}>
-              <div
-                className={styles.progressBar}
-                style={{ width: `${progress}%` }}
-              />
-              <div className={styles.progressGlow} style={{ left: `${progress}%` }} />
+          <div 
+            className={styles.loadingGlassPanel}
+            style={{
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              willChange: 'backdrop-filter',
+            }}
+          >
+            <div className={styles.loadingBrand}>
+              {BrandSection}
             </div>
 
-            <div className={styles.status}>
-              <span className={styles.message}>{loadingMessage}</span>
-              <span className={styles.percentage}>{Math.round(progress)}%</span>
-            </div>
+            <div className={styles.loader}>
+              <div className={styles.progressContainer}>
+                <div
+                  className={styles.progressBar}
+                  style={{ width: `${progress}%` }}
+                />
+                <div className={styles.progressGlow} style={{ left: `${progress}%` }} />
+              </div>
 
-            <div className={styles.loadingFooter}>
-              <p>음성 주문 시스템을 준비하고 있습니다</p>
-              <p className={styles.hint}>
-                {isCached ? '캐시된 모델을 사용합니다' : '잠시만 기다려 주세요...'}
-              </p>
+              <div className={styles.status}>
+                <span className={styles.message}>{loadingMessage}</span>
+                <span className={styles.percentage}>{Math.round(progress)}%</span>
+              </div>
+
+              <div className={styles.loadingFooter}>
+                <p>음성 주문 시스템을 준비하고 있습니다</p>
+                <p className={styles.hint}>
+                  {isCached ? '캐시된 모델을 사용합니다' : '잠시만 기다려 주세요...'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Ready View - Mobile optimized */}
         <div className={`${styles.readyView} ${isReady ? styles.readyVisible : ''}`}>
-          <div className={styles.readyBrand}>
-            {BrandSection}
-          </div>
+          <div 
+            className={styles.glassPanel}
+            style={{
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              willChange: 'backdrop-filter',
+            }}
+          >
+            <div className={styles.readyBrand}>
+              {BrandSection}
+            </div>
 
-          <div className={styles.mainContent}>
+            <div className={styles.mainContent}>
             <p className={styles.heroDesc}>
               100% 브라우저 기반 AI 음성 주문 시스템
               <br />
@@ -349,204 +398,224 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
               </div>
             </div>
           </div>
+          </div>
         </div>
-
-        {/* Footer */}
-        <footer className={styles.footer}>
-          <p>AI Cafe · Midnight Roast</p>
-          <p className={styles.footerCredit}>
-            Made by <a href="https://stomx.net/about" target="_blank" rel="noopener noreferrer">Jaymon</a>
-          </p>
-        </footer>
       </div>
     );
   }
 
   return (
     <div className="kiosk-viewport">
-      <div
-        className={`kiosk-container kiosk-${orientation}`}
+      {/* Background Video - 전체화면, 가운데 정렬 */}
+      <video
+        className={styles.videoBackground}
+        autoPlay
+        loop
+        muted
+        playsInline
+        poster="/videos/coffee-brew-poster.jpg"
         style={{
-          width: fhd.width,
-          height: fhd.height,
-          transform: `translate(-50%, -50%) scale(${scale})`,
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          objectFit: 'cover',
+          objectPosition: 'center',
+          zIndex: 0,
+          filter: 'brightness(0.5)',
         }}
       >
-        <div className={styles.container}>
-          {/* Subtle grain texture */}
-          <div className={styles.grain} />
+        <source src="/videos/coffee-brew-loop.mp4" type="video/mp4" />
+      </video>
+      {/* Dark Overlay - 전체화면 */}
+      <div 
+        className={styles.videoOverlay}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.25)',
+          zIndex: 1,
+        }}
+      />
 
-          {/* Ambient glow */}
-          <div className={`${styles.ambientGlow} ${isReady ? styles.glowReady : ''}`} />
-
-          {/* Loading View - Centered flex layout */}
-          <div className={`${styles.loadingView} ${!isLoading ? styles.loadingHidden : ''}`}>
-            <div className={styles.loadingBrand}>
-              {BrandSection}
-            </div>
-
-            <div className={styles.loader}>
-              <div className={styles.progressContainer}>
-                <div
-                  className={styles.progressBar}
-                  style={{ width: `${progress}%` }}
-                />
-                <div className={styles.progressGlow} style={{ left: `${progress}%` }} />
-              </div>
-
-              <div className={styles.status}>
-                <span className={styles.message}>{loadingMessage}</span>
-                <span className={styles.percentage}>{Math.round(progress)}%</span>
-              </div>
-
-              <div className={styles.steps}>
-                <LoadingStep
-                  label="ONNX Runtime"
-                  status={progress >= 5 ? 'done' : progress > 0 ? 'loading' : 'pending'}
-                />
-                <LoadingStep
-                  label="TTS 모델"
-                  status={progress >= 90 ? 'done' : progress > 10 ? 'loading' : 'pending'}
-                />
-                <LoadingStep
-                  label="음성 스타일"
-                  status={progress >= 100 ? 'done' : progress > 90 ? 'loading' : 'pending'}
-                />
-              </div>
-
-              <div className={styles.loadingFooter}>
-                <p>음성 주문 시스템을 준비하고 있습니다</p>
-                <p className={styles.hint}>
-                  {isCached ? '캐시된 모델을 사용합니다' : '잠시만 기다려 주세요...'}
-                </p>
-              </div>
-            </div>
+      {/* Loading View - 화면 가운데 배치 */}
+      <div className={`${styles.loadingView} ${!isLoading ? styles.loadingHidden : ''}`}>
+        <div 
+          className={styles.loadingGlassPanel}
+          style={{
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            willChange: 'backdrop-filter',
+          }}
+        >
+          <div className={styles.loadingBrand}>
+            {BrandSection}
           </div>
 
-          {/* Ready View - Brand at top, content below */}
-          <div className={`${styles.readyView} ${isReady ? styles.readyVisible : ''}`}>
-            <div className={styles.readyBrand}>
-              {BrandSection}
+          <div className={styles.loader}>
+            <div className={styles.progressContainer}>
+              <div
+                className={styles.progressBar}
+                style={{ width: `${progress}%` }}
+              />
+              <div className={styles.progressGlow} style={{ left: `${progress}%` }} />
             </div>
 
-            <div className={styles.mainContent}>
-              <p className={styles.heroDesc}>
-                100% 브라우저 기반 AI 음성 주문 시스템
-                <br />
-                <span className={styles.highlight}>서버 없이, 로컬에서 실행</span>
+            <div className={styles.status}>
+              <span className={styles.message}>{loadingMessage}</span>
+              <span className={styles.percentage}>{Math.round(progress)}%</span>
+            </div>
+
+            <div className={styles.steps}>
+              <LoadingStep
+                label="ONNX Runtime"
+                status={progress >= 5 ? 'done' : progress > 0 ? 'loading' : 'pending'}
+              />
+              <LoadingStep
+                label="TTS 모델"
+                status={progress >= 90 ? 'done' : progress > 10 ? 'loading' : 'pending'}
+              />
+              <LoadingStep
+                label="음성 스타일"
+                status={progress >= 100 ? 'done' : progress > 90 ? 'loading' : 'pending'}
+              />
+            </div>
+
+            <div className={styles.loadingFooter}>
+              <p>음성 주문 시스템을 준비하고 있습니다</p>
+              <p className={styles.hint}>
+                {isCached ? '캐시된 모델을 사용합니다' : '잠시만 기다려 주세요...'}
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-              <div className={styles.techPills}>
-                <span className={styles.techPill}>
-                  <span className={styles.pillIcon}>👁️</span>
-                  <span>MediaPipe</span>
-                </span>
-                <span className={styles.techPill}>
-                  <span className={styles.pillIcon}>🎤</span>
-                  <span>Web Speech</span>
-                </span>
-                <span className={styles.techPill}>
-                  <span className={styles.pillIcon}>🔊</span>
-                  <span>Supertonic TTS</span>
-                </span>
+      {/* Ready View - 화면 가운데 배치 */}
+      <div 
+        className={`${styles.readyView} ${isReady ? styles.readyVisible : ''}`}
+      >
+        <div 
+          className={styles.glassPanel}
+          style={{
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            willChange: 'backdrop-filter',
+          }}
+        >
+          <div className={styles.readyBrand}>
+            {BrandSection}
+          </div>
+
+          <div className={styles.mainContent}>
+          <p className={styles.heroDesc}>
+            100% 브라우저 기반 AI 음성 주문 시스템
+            <br />
+            <span className={styles.highlight}>서버 없이, 로컬에서 실행</span>
+          </p>
+
+          <div className={styles.techPills}>
+            <span className={styles.techPill}>
+              <span className={styles.pillIcon}>👁️</span>
+              <span>MediaPipe</span>
+            </span>
+            <span className={styles.techPill}>
+              <span className={styles.pillIcon}>🎤</span>
+              <span>Web Speech</span>
+            </span>
+            <span className={styles.techPill}>
+              <span className={styles.pillIcon}>🔊</span>
+              <span>Supertonic TTS</span>
+            </span>
+          </div>
+
+          {/* 카메라 토글 */}
+          <label className={styles.cameraToggle}>
+            <span className={styles.toggleLabel}>
+              <span className={styles.toggleIcon}>📷</span>
+              <span>카메라 (얼굴 인식)</span>
+            </span>
+            <div className={styles.toggleSwitch}>
+              <input
+                type="checkbox"
+                checked={cameraEnabled}
+                onChange={(e) => setCameraEnabled(e.target.checked)}
+              />
+              <span className={styles.toggleSlider} />
+            </div>
+          </label>
+
+          <button className={styles.startButton} onClick={handleStart}>
+            <span className={styles.startIcon}>☕</span>
+            <span>{cameraEnabled ? '카메라 켜고 시작' : '시작하기'}</span>
+          </button>
+
+          <div className={styles.divider} />
+
+          <div className={styles.featuresRow}>
+            <div className={styles.featureItem}>
+              <span className={styles.featureIcon}>👁️</span>
+              <div>
+                <strong>얼굴 인식</strong>
+                <p>자동 인사 시작</p>
               </div>
-
-              {/* 카메라 토글 */}
-              <label className={styles.cameraToggle}>
-                <span className={styles.toggleLabel}>
-                  <span className={styles.toggleIcon}>📷</span>
-                  <span>카메라 (얼굴 인식)</span>
-                </span>
-                <div className={styles.toggleSwitch}>
-                  <input
-                    type="checkbox"
-                    checked={cameraEnabled}
-                    onChange={(e) => setCameraEnabled(e.target.checked)}
-                  />
-                  <span className={styles.toggleSlider} />
-                </div>
-              </label>
-
-              <button className={styles.startButton} onClick={handleStart}>
-                <span className={styles.startIcon}>☕</span>
-                <span>{cameraEnabled ? '카메라 켜고 시작' : '시작하기'}</span>
-              </button>
-
-              <div className={styles.divider} />
-
-              <div className={styles.featuresRow}>
-                <div className={styles.featureItem}>
-                  <span className={styles.featureIcon}>👁️</span>
-                  <div>
-                    <strong>얼굴 인식</strong>
-                    <p>자동 인사 시작</p>
-                  </div>
-                </div>
-                <div className={styles.featureItem}>
-                  <span className={styles.featureIcon}>🎤</span>
-                  <div>
-                    <strong>음성 주문</strong>
-                    <p>한국어 인식</p>
-                  </div>
-                </div>
-                <div className={styles.featureItem}>
-                  <span className={styles.featureIcon}>🔊</span>
-                  <div>
-                    <strong>음성 응답</strong>
-                    <p>자연스러운 TTS</p>
-                  </div>
-                </div>
+            </div>
+            <div className={styles.featureItem}>
+              <span className={styles.featureIcon}>🎤</span>
+              <div>
+                <strong>음성 주문</strong>
+                <p>한국어 인식</p>
               </div>
-
-              <div className={styles.scenarioSection}>
-                <h3 className={styles.sectionLabel}>테스트 시나리오</h3>
-                <div className={styles.scenarioGrid}>
-                  <div className={styles.scenarioCard}>
-                    <span className={styles.scenarioNum}>01</span>
-                    <p>&quot;아이스 아메리카노 한 잔 주세요&quot;</p>
-                  </div>
-                  <div className={styles.scenarioCard}>
-                    <span className={styles.scenarioNum}>02</span>
-                    <p>&quot;카페라떼 하나요&quot; → &quot;따뜻하게&quot;</p>
-                  </div>
-                  <div className={styles.scenarioCard}>
-                    <span className={styles.scenarioNum}>03</span>
-                    <p>&quot;아아 두 잔이랑 핫 카푸치노 하나&quot;</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className={styles.notices}>
-                <div className={styles.noticeItem}>
-                  <span className={styles.noticeIcon}>🌐</span>
-                  <span><strong>Chrome/Edge</strong> 권장</span>
-                </div>
-                <div className={styles.noticeDot} />
-                <div className={styles.noticeItem}>
-                  <span className={styles.noticeIcon}>⚡</span>
-                  <span>규칙 기반 NLU</span>
-                </div>
-                <div className={styles.noticeDot} />
-                <div className={styles.noticeItem}>
-                  <span className={styles.noticeIcon}>⏱️</span>
-                  <span>30초 자동 리셋</span>
-                </div>
-              </div>
-
-              <div className={styles.tipsBar}>
-                <span className={styles.tipLabel}>💡 TIP</span>
-                <span className={styles.tipText}>TTS 재생 중에도 음성 입력 가능 (Barge-in)</span>
+            </div>
+            <div className={styles.featureItem}>
+              <span className={styles.featureIcon}>🔊</span>
+              <div>
+                <strong>음성 응답</strong>
+                <p>자연스러운 TTS</p>
               </div>
             </div>
           </div>
 
-          {/* Footer */}
-          <footer className={styles.footer}>
-            <p>AI Cafe · Midnight Roast Edition</p>
-            <p className={styles.footerCredit}>
-              Made by <a href="https://stomx.net/about" target="_blank" rel="noopener noreferrer">Jaymon</a> · <a href="https://stomx.net" target="_blank" rel="noopener noreferrer">stomx.net</a>
-            </p>
-          </footer>
+          <div className={styles.scenarioSection}>
+            <h3 className={styles.sectionLabel}>테스트 시나리오</h3>
+            <div className={styles.scenarioGrid}>
+              <div className={styles.scenarioCard}>
+                <span className={styles.scenarioNum}>01</span>
+                <p>&quot;아이스 아메리카노 한 잔 주세요&quot;</p>
+              </div>
+              <div className={styles.scenarioCard}>
+                <span className={styles.scenarioNum}>02</span>
+                <p>&quot;카페라떼 하나요&quot; → &quot;따뜻하게&quot;</p>
+              </div>
+              <div className={styles.scenarioCard}>
+                <span className={styles.scenarioNum}>03</span>
+                <p>&quot;아아 두 잔이랑 핫 카푸치노 하나&quot;</p>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.notices}>
+            <div className={styles.noticeItem}>
+              <span className={styles.noticeIcon}>🌐</span>
+              <span><strong>Chrome/Edge</strong> 권장</span>
+            </div>
+            <div className={styles.noticeDot} />
+            <div className={styles.noticeItem}>
+              <span className={styles.noticeIcon}>⚡</span>
+              <span>규칙 기반 NLU</span>
+            </div>
+            <div className={styles.noticeDot} />
+            <div className={styles.noticeItem}>
+              <span className={styles.noticeIcon}>⏱️</span>
+              <span>30초 자동 리셋</span>
+            </div>
+          </div>
+
+          <div className={styles.tipsBar}>
+            <span className={styles.tipLabel}>💡 TIP</span>
+            <span className={styles.tipText}>TTS 재생 중에도 음성 입력 가능 (Barge-in)</span>
+          </div>
+          </div>
         </div>
       </div>
     </div>
