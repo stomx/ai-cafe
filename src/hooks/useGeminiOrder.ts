@@ -16,6 +16,7 @@ interface ProcessResult {
     question: string;
   };
   temperatureConflicts?: MatchedOrder[];
+  pendingOrders?: MatchedOrder[]; // 온도 확정 후 추가할 아이템들
   fallback?: boolean;
 }
 
@@ -126,66 +127,67 @@ export function useGeminiOrder({
           return { success: false, message: '추가할 메뉴가 없습니다.' };
         }
 
-        const addedItems: string[] = []; // 추가된 아이템 정보 (통합 메시지용)
         const conflicts: MatchedOrder[] = [];
+        const pendingOrders: MatchedOrder[] = []; // 온도 확정 후 추가할 아이템들
 
+        // 1단계: 온도 충돌 여부 확인 및 아이템 분류
         for (const item of intent.items) {
+          const menuItem = actions.getMenuItem(item.menuId);
+          if (!menuItem) continue;
+
           // temperature가 null이고 명확화가 필요한 경우
-          if (item.temperature === null) {
-            const menuItem = actions.getMenuItem(item.menuId);
-            if (menuItem && menuItem.temperatures.length > 1) {
-              conflicts.push({
-                menuItem,
-                quantity: item.quantity,
-                temperature: null,
-              });
-              continue;
-            }
-          }
-
-          const result = actions.handleAddItem(
-            item.menuId,
-            item.temperature ?? null,
-            item.quantity
-          );
-
-          if (result.needsClarification && result.clarificationData) {
+          if (item.temperature === null && menuItem.temperatures.length > 1) {
             conflicts.push({
-              menuItem: result.clarificationData.menuItem,
-              quantity: result.clarificationData.quantity,
+              menuItem,
+              quantity: item.quantity,
               temperature: null,
             });
-          } else if (result.success) {
-            // 통합 메시지용: "메뉴명 N잔" 형식으로 수집
-            const menuItem = actions.getMenuItem(item.menuId);
-            if (menuItem) {
-              addedItems.push(`${menuItem.name} ${item.quantity}잔`);
-            }
+          } else {
+            // 온도가 확정된 아이템 (단일 온도 or 온도 지정됨)
+            const finalTemp = item.temperature ?? (menuItem.temperatures.length === 1 ? menuItem.temperatures[0] : null);
+            pendingOrders.push({
+              menuItem,
+              quantity: item.quantity,
+              temperature: finalTemp,
+            });
           }
         }
 
-        // 통합 메시지 생성: "에스프레소 3잔 콜드브루 2잔 추가했습니다."
-        const addedMessage = addedItems.length > 0
-          ? `${addedItems.join(' ')} 추가했습니다.`
-          : '';
-
+        // 2단계: 온도 충돌이 있으면 질문만 하고 아이템 추가 보류
         if (conflicts.length > 0) {
           const firstConflict = conflicts[0];
           return {
             success: true,
-            message: addedMessage,
+            message: '', // 아직 추가하지 않았으므로 메시지 없음
             temperatureConflicts: conflicts,
+            pendingOrders, // 온도 확정 아이템들도 함께 보류
             needsClarification: true,
             clarificationData: {
               menuName: firstConflict.menuItem.name,
-              question: `${firstConflict.menuItem.name} 따뜻하게 드릴까요, 차갑게 드릴까요?`,
+              question: `${firstConflict.menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`,
             },
           };
         }
 
+        // 3단계: 온도 충돌이 없으면 즉시 추가
+        const addedItems: string[] = [];
+        for (const order of pendingOrders) {
+          const result = actions.handleAddItem(
+            order.menuItem.id,
+            order.temperature,
+            order.quantity
+          );
+          if (result.success) {
+            const tempStr = order.temperature ? (order.temperature === 'HOT' ? '따뜻한' : '아이스') : '';
+            addedItems.push(`${tempStr} ${order.menuItem.name} ${order.quantity}잔`.trim());
+          }
+        }
+
         return {
           success: true,
-          message: addedMessage || '메뉴를 추가했습니다.',
+          message: addedItems.length > 0
+            ? `${addedItems.join(', ')} 추가했습니다. 더 필요하신 게 있으신가요?`
+            : '메뉴를 추가했습니다.',
         };
       }
 

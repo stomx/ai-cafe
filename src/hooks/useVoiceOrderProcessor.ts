@@ -173,6 +173,8 @@ export function useVoiceOrderProcessor({
 }: UseVoiceOrderProcessorOptions): UseVoiceOrderProcessorReturn {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [temperatureConflicts, setTemperatureConflicts] = useState<MatchedOrder[]>([]);
+  // 온도 확정 후 추가될 아이템들 (온도가 이미 결정된 아이템)
+  const [pendingOrders, setPendingOrders] = useState<MatchedOrder[]>([]);
   // 온도 충돌 처리 중 추가된 아이템 추적 (마지막에 통합 메시지용)
   const [pendingAddedItems, setPendingAddedItems] = useState<Array<{
     name: string;
@@ -377,17 +379,33 @@ export function useVoiceOrderProcessor({
                 const nextAvailTempKo = next.availableTemperature === 'ICE' ? '아이스' : '따뜻한 것';
                 response = `${next.menuItem.name}은 ${nextReqTempKo}가 없어요. ${nextAvailTempKo}으로 드릴까요?`;
               } else {
-                response = `${next.menuItem.name} 따뜻하게 드릴까요, 차갑게 드릴까요?`;
+                response = `${next.menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
               }
             } else {
-              // 남은 충돌 없음: 모든 추가된 아이템 통합 메시지
+              // 남은 충돌 없음: pendingOrders와 모든 추가된 아이템 통합 메시지
               const allAddedItems = [...pendingAddedItems, newAddedItem];
+
+              // pendingOrders도 함께 추가
+              for (const order of pendingOrders) {
+                for (let i = 0; i < order.quantity; i++) {
+                  addItem(order.menuItem, order.temperature!);
+                }
+                const tempKo = order.temperature === 'HOT' ? '따뜻한' : order.temperature === 'ICE' ? '아이스' : '';
+                allAddedItems.push({
+                  name: order.menuItem.name,
+                  temperature: order.temperature!,
+                  quantity: order.quantity,
+                });
+              }
+
+              // 통합 메시지 생성
               const itemsStr = allAddedItems.map(item => {
                 const tempKo = item.temperature === 'HOT' ? '따뜻한' : '아이스';
                 return `${tempKo} ${item.name} ${item.quantity}잔`;
               }).join(', ');
               response = `${itemsStr} 추가했습니다. 더 필요하신 게 있으신가요?`;
               setPendingAddedItems([]); // 초기화
+              setPendingOrders([]); // 초기화
             }
 
             setTimeout(() => {
@@ -531,37 +549,29 @@ export function useVoiceOrderProcessor({
           .then((result) => {
             console.log('[VoiceOrderProcessor] Gemini result:', result);
 
+            // 온도 충돌이 있는 경우: pendingOrders와 temperatureConflicts 저장
             if (result.temperatureConflicts && result.temperatureConflicts.length > 0) {
               setTemperatureConflicts(result.temperatureConflicts);
-            }
-
-            // 메시지 통합: 추가된 메뉴 메시지 + 온도 질문을 합쳐서 출력
-            let combinedMessage = '';
-
-            if (result.message) {
-              combinedMessage = result.message;
-            }
-
-            if (result.needsClarification && result.clarificationData) {
-              // 추가된 메뉴가 있으면 합치기, 없으면 질문만
-              if (combinedMessage) {
-                combinedMessage += ' ' + result.clarificationData.question;
-              } else {
-                combinedMessage = result.clarificationData.question;
+              if (result.pendingOrders && result.pendingOrders.length > 0) {
+                setPendingOrders(result.pendingOrders);
               }
-            }
 
-            // 온도 충돌이 있는데 메시지가 없으면 기본 메시지 생성
-            if (!combinedMessage && result.temperatureConflicts && result.temperatureConflicts.length > 0) {
-              const firstConflict = result.temperatureConflicts[0];
-              combinedMessage = `${firstConflict.menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
-            }
+              // 온도 질문만 출력 (아이템 추가는 온도 선택 후)
+              const message = result.clarificationData?.question ||
+                `${result.temperatureConflicts[0].menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
 
-            if (combinedMessage) {
               setTimeout(() => {
-                addAssistantResponse(combinedMessage);
-                speakRef.current(combinedMessage);
+                addAssistantResponse(message);
+                speakRef.current(message);
               }, 300);
+            } else {
+              // 온도 충돌이 없는 경우: 즉시 추가 완료 메시지
+              if (result.message) {
+                setTimeout(() => {
+                  addAssistantResponse(result.message);
+                  speakRef.current(result.message);
+                }, 300);
+              }
             }
 
             setTyping(false);
@@ -588,7 +598,7 @@ export function useVoiceOrderProcessor({
     }
   }, [
     addUserVoice, updateMessage, removeMessage, addAssistantResponse, setTyping,
-    processMatchedOrders, temperatureConflicts, pendingAddedItems, addItem, items, addToQueue,
+    processMatchedOrders, temperatureConflicts, pendingOrders, pendingAddedItems, addItem, items, addToQueue,
     clearOrder, clearMessages, resetActivity, speakRef, isGeminiAvailable,
     processWithGemini, fallbackToMenuMatcher, showOrderConfirmModal,
     onShowOrderConfirm, onConfirmOrder
@@ -623,27 +633,44 @@ export function useVoiceOrderProcessor({
         // 남은 충돌이 있으면: 추가된 아이템 저장 + 다음 온도 질문만
         setPendingAddedItems(prev => [...prev, newAddedItem]);
         const next = remainingConflicts[0];
-        response = `${next.menuItem.name} 따뜻하게 드릴까요, 차갑게 드릴까요?`;
+        response = `${next.menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
       } else {
-        // 남은 충돌 없음: 모든 추가된 아이템 통합 메시지
+        // 남은 충돌 없음: pendingOrders와 모든 추가된 아이템 통합 메시지
         const allAddedItems = [...pendingAddedItems, newAddedItem];
+
+        // pendingOrders도 함께 추가
+        for (const order of pendingOrders) {
+          for (let i = 0; i < order.quantity; i++) {
+            addItem(order.menuItem, order.temperature!);
+          }
+          const tempKo = order.temperature === 'HOT' ? '따뜻한' : order.temperature === 'ICE' ? '아이스' : '';
+          allAddedItems.push({
+            name: order.menuItem.name,
+            temperature: order.temperature!,
+            quantity: order.quantity,
+          });
+        }
+
+        // 통합 메시지 생성
         const itemsStr = allAddedItems.map(item => {
           const tempKo = item.temperature === 'HOT' ? '따뜻한' : '아이스';
           return `${tempKo} ${item.name} ${item.quantity}잔`;
         }).join(', ');
         response = `${itemsStr} 추가했습니다. 더 필요하신 게 있으신가요?`;
         setPendingAddedItems([]); // 초기화
+        setPendingOrders([]); // 초기화
       }
 
       addAssistantResponse(response);
       speakRef.current(response);
     }
-  }, [temperatureConflicts, pendingAddedItems, addItem, addAssistantResponse, resetActivity, speakRef]);
+  }, [temperatureConflicts, pendingAddedItems, pendingOrders, addItem, addAssistantResponse, resetActivity, speakRef]);
 
   // 상태 초기화 (세션 종료 시 사용)
   const resetState = useCallback(() => {
     setVoiceState('idle');
     setTemperatureConflicts([]);
+    setPendingOrders([]);
     setPendingAddedItems([]);
     interimMessageIdRef.current = null;
   }, []);

@@ -17,8 +17,8 @@ const state: EchoFilterState = {
   ttsEndTime: null,
 };
 
-// TTS 에코 감지 윈도우 - 짧게 유지
-const ECHO_WINDOW_MS = 800;
+// TTS 에코 감지 윈도우 - TTS 발화 시간을 고려하여 충분히 길게
+const ECHO_WINDOW_MS = 3000;
 
 // 유사도 임계값 - 높게 설정하여 오탐 방지
 const SIMILARITY_THRESHOLD = 0.7;
