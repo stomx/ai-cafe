@@ -163,7 +163,9 @@ export default function Home() {
       handleConfirmOrderRef.current();
     },
     onOrderConfirmed: () => {
+      console.log('[Page] Order confirmed - stopping mic');
       setVoiceState('idle');
+      stopListeningRef.current(); // 마이크 중지
     },
   });
 
