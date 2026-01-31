@@ -602,12 +602,12 @@ export function SplashScreen({ onStart, skipLoading = false }: SplashScreenProps
             <div className={styles.noticeDot} />
             <div className={styles.noticeItem}>
               <span className={styles.noticeIcon}>⚡</span>
-              <span>규칙 기반 NLU</span>
+              <span>Gemini LLM</span>
             </div>
             <div className={styles.noticeDot} />
             <div className={styles.noticeItem}>
               <span className={styles.noticeIcon}>⏱️</span>
-              <span>30초 자동 리셋</span>
+              <span>45초 자동 리셋</span>
             </div>
           </div>
 
