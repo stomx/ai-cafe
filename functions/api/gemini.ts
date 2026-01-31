@@ -246,7 +246,7 @@ function parseGeminiResponse(text: string) {
         menuId: item.menuId || '',
         menuName: item.menuName || '',
         temperature: item.temperature ?? null,
-        quantity: item.quantity || 1,
+        quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
         action: item.action,
       })),
       message: parsed.message,
@@ -340,7 +340,9 @@ export async function onRequestPost(context: any) {
         );
       }
 
+      console.log('[Gemini API] Raw response:', text);
       const parsed = parseGeminiResponse(text);
+      console.log('[Gemini API] Parsed intent:', JSON.stringify(parsed, null, 2));
       return new Response(
         JSON.stringify(parsed),
         { headers: { 'Content-Type': 'application/json' } }

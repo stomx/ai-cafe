@@ -422,6 +422,11 @@ export function useGeminiOrder({
       });
 
       console.log('[Gemini] Intent analyzed:', intent);
+      if (intent.items && intent.items.length > 0) {
+        console.log('[Gemini] Items with quantities:', intent.items.map(item =>
+          `${item.menuName}(${item.menuId}) qty=${item.quantity} temp=${item.temperature}`
+        ).join(', '));
+      }
 
       // confidence가 낮으면 폴백
       if (intent.confidence < 0.5) {
