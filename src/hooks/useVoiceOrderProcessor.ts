@@ -383,14 +383,13 @@ export function useVoiceOrderProcessor({
               }
             } else {
               // 남은 충돌 없음: pendingOrders와 모든 추가된 아이템 통합 메시지
-              const allAddedItems = [...pendingAddedItems, newAddedItem];
+              const allAddedItems: Array<{ name: string; temperature: 'HOT' | 'ICE'; quantity: number }> = [];
 
-              // pendingOrders도 함께 추가
+              // 1. pendingOrders 먼저 추가 (온도 확정 아이템: 콜드브루 등)
               for (const order of pendingOrders) {
                 for (let i = 0; i < order.quantity; i++) {
                   addItem(order.menuItem, order.temperature!);
                 }
-                const tempKo = order.temperature === 'HOT' ? '따뜻한' : order.temperature === 'ICE' ? '아이스' : '';
                 allAddedItems.push({
                   name: order.menuItem.name,
                   temperature: order.temperature!,
@@ -398,10 +397,16 @@ export function useVoiceOrderProcessor({
                 });
               }
 
+              // 2. pendingAddedItems 추가 (이전에 온도 선택한 아이템들)
+              allAddedItems.push(...pendingAddedItems);
+
+              // 3. 현재 온도 선택한 아이템 추가
+              allAddedItems.push(newAddedItem);
+
               // 통합 메시지 생성
               const itemsStr = allAddedItems.map(item => {
-                const tempKo = item.temperature === 'HOT' ? '따뜻한' : '아이스';
-                return `${tempKo} ${item.name} ${item.quantity}잔`;
+                const tempKo = item.temperature === 'HOT' ? '따뜻한' : item.temperature === 'ICE' ? '아이스' : '';
+                return tempKo ? `${tempKo} ${item.name} ${item.quantity}잔` : `${item.name} ${item.quantity}잔`;
               }).join(', ');
               response = `${itemsStr} 추가했습니다. 더 필요하신 게 있으신가요?`;
               setPendingAddedItems([]); // 초기화
@@ -636,14 +641,13 @@ export function useVoiceOrderProcessor({
         response = `${next.menuItem.name} 온도를 선택해주세요. 따뜻하게 또는 차갑게라고 말씀해주세요.`;
       } else {
         // 남은 충돌 없음: pendingOrders와 모든 추가된 아이템 통합 메시지
-        const allAddedItems = [...pendingAddedItems, newAddedItem];
+        const allAddedItems: Array<{ name: string; temperature: 'HOT' | 'ICE'; quantity: number }> = [];
 
-        // pendingOrders도 함께 추가
+        // 1. pendingOrders 먼저 추가 (온도 확정 아이템: 콜드브루 등)
         for (const order of pendingOrders) {
           for (let i = 0; i < order.quantity; i++) {
             addItem(order.menuItem, order.temperature!);
           }
-          const tempKo = order.temperature === 'HOT' ? '따뜻한' : order.temperature === 'ICE' ? '아이스' : '';
           allAddedItems.push({
             name: order.menuItem.name,
             temperature: order.temperature!,
@@ -651,10 +655,16 @@ export function useVoiceOrderProcessor({
           });
         }
 
+        // 2. pendingAddedItems 추가 (이전에 온도 선택한 아이템들)
+        allAddedItems.push(...pendingAddedItems);
+
+        // 3. 현재 온도 선택한 아이템 추가
+        allAddedItems.push(newAddedItem);
+
         // 통합 메시지 생성
         const itemsStr = allAddedItems.map(item => {
-          const tempKo = item.temperature === 'HOT' ? '따뜻한' : '아이스';
-          return `${tempKo} ${item.name} ${item.quantity}잔`;
+          const tempKo = item.temperature === 'HOT' ? '따뜻한' : item.temperature === 'ICE' ? '아이스' : '';
+          return tempKo ? `${tempKo} ${item.name} ${item.quantity}잔` : `${item.name} ${item.quantity}잔`;
         }).join(', ');
         response = `${itemsStr} 추가했습니다. 더 필요하신 게 있으신가요?`;
         setPendingAddedItems([]); // 초기화
