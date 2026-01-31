@@ -69,6 +69,7 @@ export function useGeminiOrder({
         success: true,
         message: '',
         temperatureConflicts: matchResult.temperatureConflicts,
+        pendingOrders: matchResult.orders, // 온도 확정 아이템 보존
         fallback: true,
       };
     }

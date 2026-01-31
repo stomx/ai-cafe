@@ -283,9 +283,20 @@ export async function onRequestPost(context: any) {
     const body = await request.json();
     const { transcript, currentItems, pendingClarification } = body;
 
+    console.log('[Gemini API] Request:', {
+      transcript: transcript ? `"${transcript.substring(0, 50)}..."` : 'MISSING',
+      transcriptType: typeof transcript,
+      hasCurrentItems: !!currentItems,
+      hasPendingClarification: !!pendingClarification,
+    });
+
     if (!transcript) {
+      console.error('[Gemini API] Transcript validation failed:', {
+        transcript,
+        body: JSON.stringify(body).substring(0, 200)
+      });
       return new Response(
-        JSON.stringify({ error: 'Transcript is required' }),
+        JSON.stringify({ error: 'Transcript is required', received: typeof transcript }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
