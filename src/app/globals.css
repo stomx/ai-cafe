@@ -954,11 +954,11 @@ body::before {
   }
 
   .order-list-container {
-    max-height: 180px;
+    flex: 1;
+    min-height: 200px;
     overflow-y: auto;
     margin-bottom: var(--spacing-md);
     padding-right: var(--spacing-xs);
-    flex-shrink: 0;
   }
 
   .order-list {
@@ -1115,6 +1115,7 @@ body::before {
   /* Voice Order */
   .order-voice-section {
     margin-bottom: var(--spacing-sm);
+    flex-shrink: 0;
   }
 
   .voice-order-container {
@@ -1972,7 +1973,8 @@ body::before {
 
 /* 세로 모드: 주문 리스트 높이 조정 */
 .kiosk-portrait .order-list-container {
-  max-height: 120px;
+  flex: 1;
+  min-height: 150px;
 }
 
 /* 세로 모드: 대기열 섹션 더 컴팩트하게 */
