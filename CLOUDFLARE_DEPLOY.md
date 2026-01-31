@@ -30,10 +30,9 @@ Root directory: (leave empty)
 |--------------|-------|------|
 | `GEMINI_API_KEY` | `your-api-key` | [Google AI Studio](https://aistudio.google.com/app/apikey)에서 발급 |
 | `NEXT_PUBLIC_TTS_CDN_URL` | `https://assets.stomx.net/tts/onnx` | TTS ONNX 모델 CDN URL |
-| `NEXT_PUBLIC_VOICE_STYLES_CDN_URL` | `https://assets.stomx.net/tts/voice_styles` | Voice Styles CDN URL |
 | `NODE_VERSION` | `18` | (선택) Node.js 버전 명시 |
 
-**주의**: TTS 파일은 `assets.stomx.net` CDN에서 불러오므로 Cloudflare Pages에 업로드할 필요가 없습니다.
+**주의**: ONNX 파일은 `assets.stomx.net` CDN에서 불러옵니다. Voice Styles JSON은 Git에 포함되어 있습니다.
 
 ## 3. 배포
 
@@ -78,9 +77,10 @@ https://ai-cafe.pages.dev
    - 음성 주문 시 `/api/gemini` 요청 성공 (200 OK)
 
 2. **TTS 파일 로드 확인**
-   - Network 탭에서 `https://assets.stomx.net/tts/onnx/tts.json` 요청 성공 (200 OK)
+   - Network 탭에서 다음 요청 성공 확인:
+     - `https://assets.stomx.net/tts/onnx/tts.json` (200 OK, CORS 허용)
+     - `/tts/voice_styles/F1.json` (200 OK, 로컬 파일)
    - Console에서 `[TTS] Failed to load Supertonic` 오류 없음
-   - CORS 헤더 확인: `access-control-allow-origin: *`
 
 3. **COEP 헤더 확인**
    - Network 탭 → 응답 헤더:
@@ -93,32 +93,37 @@ https://ai-cafe.pages.dev
 ## 6. TTS CDN 설정 (assets.stomx.net)
 
 ### 6.1 CDN 구조
-TTS 파일은 별도 CDN에서 제공됩니다:
+ONNX 모델 파일은 별도 CDN에서 제공됩니다:
 ```
 https://assets.stomx.net/
-├── tts/
-│   ├── onnx/
-│   │   ├── duration_predictor.onnx (1.5MB)
-│   │   ├── text_encoder.onnx (26MB)
-│   │   ├── vector_estimator.onnx (126MB)
-│   │   ├── vocoder.onnx (97MB)
-│   │   ├── tts.json
-│   │   └── unicode_indexer.json
-│   └── voice_styles/
-│       ├── F1.json ~ F5.json
-│       └── M1.json ~ M5.json
+└── tts/
+    └── onnx/
+        ├── duration_predictor.onnx (1.5MB)
+        ├── text_encoder.onnx (26MB)
+        ├── vector_estimator.onnx (126MB)
+        ├── vocoder.onnx (97MB)
+        ├── tts.json
+        └── unicode_indexer.json
+```
+
+Voice Styles JSON 파일은 Git에 포함되어 있습니다:
+```
+public/tts/voice_styles/
+├── F1.json
+├── F2.json ~ F5.json
+└── M1.json ~ M5.json
 ```
 
 ### 6.2 환경 변수 설정
 Cloudflare Pages 환경 변수에 CDN URL 추가:
 - `NEXT_PUBLIC_TTS_CDN_URL=https://assets.stomx.net/tts/onnx`
-- `NEXT_PUBLIC_VOICE_STYLES_CDN_URL=https://assets.stomx.net/tts/voice_styles`
 
 **장점**:
-- ONNX 파일을 Git에 포함하지 않아도 됨
+- ONNX 파일을 Git에 포함하지 않아도 됨 (250MB)
 - GitHub LFS 대역폭 제한 회피
 - CDN 캐싱으로 빠른 로딩
 - 배포 시간 단축
+- Voice Styles는 작은 JSON이므로 Git에 포함 (10개 파일, 각 ~300KB)
 
 ### 5.2 문제 해결
 

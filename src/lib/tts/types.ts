@@ -92,29 +92,16 @@ export interface VoiceStyleJSON {
 // Unicode indexer type
 export type UnicodeIndexer = number[];
 
-// Voice Styles CDN URL helper
-export function getVoiceStylesUrl(): string {
-  return typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_VOICE_STYLES_CDN_URL || '/tts/voice_styles')
-    : '/tts/voice_styles';
-}
-
 // Default voice styles (multilingual - supports ko, en, es, pt, fr)
-// Note: path will be resolved with CDN URL at runtime
 export const DEFAULT_VOICES: VoiceInfo[] = [
-  { id: 'F1', name: '여성 1', language: 'ko', gender: 'female', path: 'F1.json' },
-  { id: 'F2', name: '여성 2', language: 'ko', gender: 'female', path: 'F2.json' },
-  { id: 'F3', name: '여성 3', language: 'ko', gender: 'female', path: 'F3.json' },
-  { id: 'F4', name: '여성 4', language: 'ko', gender: 'female', path: 'F4.json' },
-  { id: 'F5', name: '여성 5', language: 'ko', gender: 'female', path: 'F5.json' },
-  { id: 'M1', name: '남성 1', language: 'ko', gender: 'male', path: 'M1.json' },
-  { id: 'M2', name: '남성 2', language: 'ko', gender: 'male', path: 'M2.json' },
-  { id: 'M3', name: '남성 3', language: 'ko', gender: 'male', path: 'M3.json' },
-  { id: 'M4', name: '남성 4', language: 'ko', gender: 'male', path: 'M4.json' },
-  { id: 'M5', name: '남성 5', language: 'ko', gender: 'male', path: 'M5.json' },
+  { id: 'F1', name: '여성 1', language: 'ko', gender: 'female', path: '/tts/voice_styles/F1.json' },
+  { id: 'F2', name: '여성 2', language: 'ko', gender: 'female', path: '/tts/voice_styles/F2.json' },
+  { id: 'F3', name: '여성 3', language: 'ko', gender: 'female', path: '/tts/voice_styles/F3.json' },
+  { id: 'F4', name: '여성 4', language: 'ko', gender: 'female', path: '/tts/voice_styles/F4.json' },
+  { id: 'F5', name: '여성 5', language: 'ko', gender: 'female', path: '/tts/voice_styles/F5.json' },
+  { id: 'M1', name: '남성 1', language: 'ko', gender: 'male', path: '/tts/voice_styles/M1.json' },
+  { id: 'M2', name: '남성 2', language: 'ko', gender: 'male', path: '/tts/voice_styles/M2.json' },
+  { id: 'M3', name: '남성 3', language: 'ko', gender: 'male', path: '/tts/voice_styles/M3.json' },
+  { id: 'M4', name: '남성 4', language: 'ko', gender: 'male', path: '/tts/voice_styles/M4.json' },
+  { id: 'M5', name: '남성 5', language: 'ko', gender: 'male', path: '/tts/voice_styles/M5.json' },
 ];
-
-// Helper to get full voice path with CDN URL
-export function getVoiceStylePath(filename: string): string {
-  return `${getVoiceStylesUrl()}/${filename}`;
-}
