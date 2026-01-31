@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAIStore } from '@/store/aiStore';
-import { SupertonicTTS, Language } from '@/lib/tts';
+import { SupertonicTTS, Language, getVoiceStylePath } from '@/lib/tts';
 
 interface UseTextToSpeechOptions {
   language?: string;
@@ -51,7 +51,7 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}): UseTextTo
     rate = 1,
     pitch = 1,
     volume = 1,
-    voice = '/tts/voice_styles/F1.json',
+    voice = getVoiceStylePath('F1.json'),
     preferSupertonic = true,
     onStart,
     onEnd,
@@ -143,7 +143,8 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}): UseTextTo
         console.log('[TTS] Loading Supertonic TTS...');
 
         if (!supertonicInstance) {
-          supertonicInstance = new SupertonicTTS('/tts/onnx');
+          const cdnUrl = process.env.NEXT_PUBLIC_TTS_CDN_URL || '/tts/onnx';
+          supertonicInstance = new SupertonicTTS(cdnUrl);
         }
 
         await supertonicInstance.load((progress, message) => {

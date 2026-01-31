@@ -29,6 +29,10 @@ const TTS_CACHE_NAME = 'supertonic-tts-v3';
 // 로컬: /tts/onnx, 운영: https://assets.stomx.net/tts/onnx
 const TTS_CDN_URL = process.env.NEXT_PUBLIC_TTS_CDN_URL || '/tts/onnx';
 
+// Voice Styles CDN URL (환경변수로 설정)
+// 로컬: /tts/voice_styles, 운영: https://assets.stomx.net/tts/voice_styles
+const VOICE_STYLES_CDN_URL = process.env.NEXT_PUBLIC_VOICE_STYLES_CDN_URL || '/tts/voice_styles';
+
 // ============================================================================
 // Cache Utilities
 // ============================================================================
@@ -691,7 +695,7 @@ export class SupertonicTTS implements TTSEngine {
     }
 
     const {
-      voice = '/tts/voice_styles/F1.json',
+      voice = `${VOICE_STYLES_CDN_URL}/F1.json`,
       speed = 1.2,
       volume = 2,
       totalStep = 30,
@@ -1141,7 +1145,7 @@ if (typeof window !== 'undefined') {
     const ttsAny = tts as any;
 
     // Load voice style
-    const style = await tts.loadVoiceStyle('/tts/voice_styles/F1.json');
+    const style = await tts.loadVoiceStyle(`${VOICE_STYLES_CDN_URL}/F1.json`);
 
     // Run inference
     const { wav } = await ttsAny._infer([text], ['ko'], style, 30, 1.2);

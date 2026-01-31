@@ -29,32 +29,11 @@ Root directory: (leave empty)
 | Variable Name | Value | Note |
 |--------------|-------|------|
 | `GEMINI_API_KEY` | `your-api-key` | [Google AI Studio](https://aistudio.google.com/app/apikey)에서 발급 |
+| `NEXT_PUBLIC_TTS_CDN_URL` | `https://assets.stomx.net/tts/onnx` | TTS ONNX 모델 CDN URL |
+| `NEXT_PUBLIC_VOICE_STYLES_CDN_URL` | `https://assets.stomx.net/tts/voice_styles` | Voice Styles CDN URL |
 | `NODE_VERSION` | `18` | (선택) Node.js 버전 명시 |
 
-### 2.3 ONNX 파일 업로드 (중요!)
-ONNX 파일은 GitHub LFS 대역폭 제한으로 인해 Git에 포함되지 않습니다.
-**수동으로 Cloudflare Pages에 업로드해야 합니다.**
-
-**방법 1: Wrangler CLI로 업로드** (권장)
-```bash
-# 로컬에서 빌드
-npm run build
-
-# ONNX 파일을 out 디렉토리에 복사
-cp -r public/tts/onnx/*.onnx out/tts/onnx/
-
-# Cloudflare Pages에 배포
-npx wrangler pages deploy out --project-name=ai-cafe
-```
-
-**방법 2: Cloudflare Dashboard에서 직접 업로드**
-1. 첫 배포 후 생성된 Cloudflare Pages 프로젝트 접속
-2. **Settings** → **Functions** → **Assets**
-3. `/tts/onnx/` 경로에 다음 파일 업로드:
-   - `duration_predictor.onnx` (1.5MB)
-   - `text_encoder.onnx` (26MB)
-   - `vector_estimator.onnx` (126MB)
-   - `vocoder.onnx` (97MB)
+**주의**: TTS 파일은 `assets.stomx.net` CDN에서 불러오므로 Cloudflare Pages에 업로드할 필요가 없습니다.
 
 ## 3. 배포
 
@@ -99,8 +78,9 @@ https://ai-cafe.pages.dev
    - 음성 주문 시 `/api/gemini` 요청 성공 (200 OK)
 
 2. **TTS 파일 로드 확인**
-   - Network 탭에서 `/tts/onnx/tts.json` 요청 성공 (200 OK)
+   - Network 탭에서 `https://assets.stomx.net/tts/onnx/tts.json` 요청 성공 (200 OK)
    - Console에서 `[TTS] Failed to load Supertonic` 오류 없음
+   - CORS 헤더 확인: `access-control-allow-origin: *`
 
 3. **COEP 헤더 확인**
    - Network 탭 → 응답 헤더:
@@ -110,56 +90,35 @@ https://ai-cafe.pages.dev
      ```
    - Google Analytics 차단 오류 없음
 
-## 6. ONNX 파일 업로드 상세 가이드
+## 6. TTS CDN 설정 (assets.stomx.net)
 
-### 6.1 로컬 파일 준비
-ONNX 파일들은 `public/tts/onnx/` 디렉토리에 있어야 합니다:
-```bash
-ls -lh public/tts/onnx/*.onnx
-# duration_predictor.onnx (1.5MB)
-# text_encoder.onnx (26MB)
-# vector_estimator.onnx (126MB)
-# vocoder.onnx (97MB)
+### 6.1 CDN 구조
+TTS 파일은 별도 CDN에서 제공됩니다:
+```
+https://assets.stomx.net/
+├── tts/
+│   ├── onnx/
+│   │   ├── duration_predictor.onnx (1.5MB)
+│   │   ├── text_encoder.onnx (26MB)
+│   │   ├── vector_estimator.onnx (126MB)
+│   │   ├── vocoder.onnx (97MB)
+│   │   ├── tts.json
+│   │   └── unicode_indexer.json
+│   └── voice_styles/
+│       ├── F1.json ~ F5.json
+│       └── M1.json ~ M5.json
 ```
 
-### 6.2 Wrangler CLI로 배포 (자동화)
-```bash
-# 1. Wrangler 설치
-npm install -g wrangler
+### 6.2 환경 변수 설정
+Cloudflare Pages 환경 변수에 CDN URL 추가:
+- `NEXT_PUBLIC_TTS_CDN_URL=https://assets.stomx.net/tts/onnx`
+- `NEXT_PUBLIC_VOICE_STYLES_CDN_URL=https://assets.stomx.net/tts/voice_styles`
 
-# 2. Cloudflare 로그인
-wrangler login
-
-# 3. 로컬 빌드
-npm run build
-
-# 4. ONNX 파일 복사
-mkdir -p out/tts/onnx
-cp public/tts/onnx/*.onnx out/tts/onnx/
-cp public/tts/onnx/*.json out/tts/onnx/
-cp -r public/tts/voice_styles out/tts/
-
-# 5. Cloudflare Pages 배포
-wrangler pages deploy out --project-name=ai-cafe --branch=main
-```
-
-**주의**: 첫 배포는 Cloudflare Dashboard에서 수행하고, 이후 업데이트는 Wrangler로 진행하세요.
-
-### 6.3 자동 배포 스크립트
-`package.json`에 배포 스크립트 추가:
-```json
-{
-  "scripts": {
-    "deploy": "npm run build && npm run copy-onnx && wrangler pages deploy out --project-name=ai-cafe",
-    "copy-onnx": "mkdir -p out/tts/onnx && cp public/tts/onnx/*.onnx out/tts/onnx/ && cp public/tts/onnx/*.json out/tts/onnx/ && cp -r public/tts/voice_styles out/tts/"
-  }
-}
-```
-
-사용:
-```bash
-npm run deploy
-```
+**장점**:
+- ONNX 파일을 Git에 포함하지 않아도 됨
+- GitHub LFS 대역폭 제한 회피
+- CDN 캐싱으로 빠른 로딩
+- 배포 시간 단축
 
 ### 5.2 문제 해결
 
